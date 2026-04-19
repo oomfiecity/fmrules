@@ -52,6 +52,34 @@ jobs:
 
 The action downloads the published binary for the runner (Linux x64/arm64, macOS x64/arm64) with SHA-256 checksum verification, runs `fmrules compile`, and reports whether the output changed.
 
+By default it also publishes the compiled `mailrules.json` + `meta/lockfile.json` as a GitHub Release on the consumer repo whenever the compile output changed, tagged `compile-YYYY-MM-DD-<shortsha>`. Pass `release: 'false'` to disable.
+
+### Inputs
+
+| Input | Default | Purpose |
+|---|---|---|
+| `version` | action ref or `latest` | fmrules release tag to install (e.g. `v1`, `v1.2.3`, `latest`). |
+| `rules-dir` | `.` | Working directory that contains `rules/` and `meta/`. |
+| `out` | `mailrules.json` | Output path, relative to `rules-dir`. |
+| `extra-args` | `''` | Additional flags forwarded verbatim to `fmrules compile`. |
+| `token` | `${{ github.token }}` | Token used to download binaries and (optionally) publish releases. |
+| `release` | `'true'` | Publish a Release on the consumer repo when output changed. `'false'` disables. |
+| `release-tag` | `compile-YYYY-MM-DD-<shortsha>` | Override the release tag. Re-runs with the same tag are idempotent (reuse existing release). |
+| `release-name` | tag | Override the release title. |
+| `release-notes` | auto | Override the release body (markdown). |
+
+### Outputs
+
+| Output | Meaning |
+|---|---|
+| `version` | Resolved fmrules version that executed. |
+| `changed` | `true` when the rendered output differs from HEAD. |
+| `output-path` | Absolute path of the generated `mailrules.json`. |
+| `release-tag` | Tag of the published (or pre-existing) release. Empty when the release step was skipped. |
+| `release-url` | URL of the published (or pre-existing) release. Empty when skipped. |
+
+Releases never fire on `pull_request` events — PR compiles wouldn't have write access to the base repo and shouldn't publish pre-merge rule state.
+
 ## Compiler invariants
 
 - Deterministic output: same YAML inputs compile to byte-identical `mailrules.json`, for any hash-stable operating system / Node runtime.

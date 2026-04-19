@@ -37,6 +37,9 @@ jobs:
         with:
           rules-dir: tests/fixtures/fan-out
           version: latest
+          # Smoke compiles a fixture every CI run; we don't want those
+          # disposable compiles spawning GitHub Releases on this repo.
+          release: 'false'
 
       - name: Assert outputs
         shell: bash
