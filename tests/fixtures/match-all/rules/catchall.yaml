@@ -1,0 +1,11 @@
+defaults:
+  from: vendor.com
+
+rules:
+  - name: With own matcher
+    subject: receipt
+    file_in: Tickets
+
+  - name: Catchall opt-in
+    match_all: true
+    file_in: Tickets

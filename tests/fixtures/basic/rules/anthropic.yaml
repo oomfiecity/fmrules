@@ -1,0 +1,27 @@
+defaults:
+  from: anthropic.com
+  use: [ simplelogin ]
+
+archetypes:
+  alert:
+    file_in: Account alerts
+
+rules:
+  - name: Anthropic Claude login links
+    subject: Secure link to log in to Claude
+    file_in: Login Codes
+
+  - archetype: alert
+    name: Anthropic account alerts
+    subject:
+      - Your subscription access has been paused
+      - welcome to the pro plan
+
+  - name: Anthropic marketing spam
+    mark_spam: true
+    mark_read: true
+    discard: true
+    stop: true
+    subject:
+      - Introducing
+      - New in Claude

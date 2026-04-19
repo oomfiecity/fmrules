@@ -1,0 +1,27 @@
+{
+  "name": "fmrules",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "fmrules": "./src/cli.ts"
+  },
+  "scripts": {
+    "compile": "bun run src/cli.ts compile",
+    "check": "bun run src/cli.ts check",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "ci": "bun run typecheck && bun test"
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1",
+    "yaml": "^2.7.0",
+    "yargs": "^17.7.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/yargs": "^17.0.33",
+    "typescript": "^5.7.2"
+  }
+}

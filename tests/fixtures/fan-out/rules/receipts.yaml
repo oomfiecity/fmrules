@@ -1,0 +1,9 @@
+rules:
+  - name: Receipts fan-out
+    from: shop.com
+    file_in: Receipts
+    use: [ split ]
+    subject:
+      - Order
+      - Receipt
+      - Invoice

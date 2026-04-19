@@ -1,0 +1,46 @@
+name: Action smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'action/**'
+      - '.github/workflows/action-smoke.yml'
+  pull_request:
+    paths:
+      - 'action/**'
+      - '.github/workflows/action-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: fmrules
+        uses: ./action
+        with:
+          rules-dir: tests/fixtures/fan-out
+          version: latest
+
+      - name: Assert outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "version=${{ steps.fmrules.outputs.version }}"
+          echo "changed=${{ steps.fmrules.outputs.changed }}"
+          echo "output-path=${{ steps.fmrules.outputs.output-path }}"
+          test -f "${{ steps.fmrules.outputs.output-path }}"
+          jq empty "${{ steps.fmrules.outputs.output-path }}"
+          if [ "${{ steps.fmrules.outputs.changed }}" != "true" ]; then
+            echo "::error::Expected changed=true on first compile of fan-out fixture."
+            exit 1
+          fi

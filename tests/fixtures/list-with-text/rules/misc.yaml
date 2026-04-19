@@ -1,0 +1,35 @@
+rules:
+  - name: Radicale list spam
+    list: Radicale.Kozea.github.com
+    mark_spam: true
+    stop: true
+
+  - name: List already wrapped
+    list: "<foo.example.com>"
+    file_in: Lists
+
+  - name: Multiple lists
+    list:
+      - first.example.com
+      - second.example.com
+    file_in: Lists
+
+  - name: Paddle receipts via with
+    with: paddle
+    subject: Receipt
+    file_in: Receipts
+
+  - name: With multiple
+    with: [stripe, braintree]
+    file_in: Receipts
+
+  - name: Text phrase
+    text: "PO Box pickup"
+    file_in: Receipts
+
+  - name: Text multiple phrases
+    text:
+      - shipped
+      - dispatched
+    to: alerts@example.com
+    file_in: Receipts
