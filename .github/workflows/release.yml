@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           BIN=./dist/fmrules-${{ matrix.native_target }}
           "$BIN" --version
-          "$BIN" compile --cwd example --dry-run
+          "$BIN" compile --cwd tests/fixtures/fan-out --dry-run
 
       - name: Cross-build (${{ matrix.cross_targets }})
         run: |
