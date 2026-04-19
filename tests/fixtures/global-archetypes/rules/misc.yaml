@@ -1,0 +1,12 @@
+archetypes:
+  alert:
+    file_in: Spam
+
+rules:
+  - name: Uses global spam-kill
+    archetype: spam-kill
+    from: bad@example.com
+
+  - name: Local shadows global
+    archetype: alert
+    from: news@example.com

@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      prerelease: ${{ steps.compute.outputs.prerelease }}
+      is_tag: ${{ steps.compute.outputs.is_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: compute
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            PRERELEASE=false
+            IS_TAG=true
+          else
+            PKG_VERSION=$(jq -r .version package.json)
+            SHORT_SHA="${GITHUB_SHA:0:7}"
+            VERSION="v${PKG_VERSION}-main.${GITHUB_RUN_NUMBER}.${SHORT_SHA}"
+            PRERELEASE=true
+            IS_TAG=false
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "is_tag=$IS_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION (prerelease=$PRERELEASE)"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            native_target: bun-linux-x64
+            cross_targets: bun-linux-arm64
+          - os: macos-latest
+            native_target: bun-darwin-arm64
+            cross_targets: bun-darwin-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build native (${{ matrix.native_target }})
+        run: |
+          mkdir -p dist
+          bun build src/cli.ts \
+            --compile \
+            --target=${{ matrix.native_target }} \
+            --outfile=dist/fmrules-${{ matrix.native_target }}
+
+      - name: Smoke test native binary
+        run: |
+          set -euo pipefail
+          BIN=./dist/fmrules-${{ matrix.native_target }}
+          "$BIN" --version
+          "$BIN" compile --cwd example --dry-run
+
+      - name: Cross-build (${{ matrix.cross_targets }})
+        run: |
+          set -euo pipefail
+          for target in ${{ matrix.cross_targets }}; do
+            bun build src/cli.ts \
+              --compile \
+              --target=$target \
+              --outfile=dist/fmrules-$target
+          done
+
+      - name: Generate per-runner checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          shasum -a 256 fmrules-* > SHA256SUMS-${{ matrix.os }}.txt
+          cat SHA256SUMS-${{ matrix.os }}.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: dist
+
+      - name: Combine checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          cat SHA256SUMS-*.txt > SHA256SUMS.txt
+          rm SHA256SUMS-*.txt
+          cat SHA256SUMS.txt
+          ls -la
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.version }}
+          name: ${{ needs.version.outputs.version }}
+          prerelease: ${{ needs.version.outputs.prerelease }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/fmrules-*
+            dist/SHA256SUMS.txt

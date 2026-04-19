@@ -1,0 +1,6 @@
+folders:
+  - Account alerts
+  - Login Codes
+
+file_order:
+  - anthropic.yaml

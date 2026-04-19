@@ -1,0 +1,9 @@
+rules:
+  - name: Kill obvious spam
+    subjects:
+      - "You have won"
+      - "Congratulations winner"
+    mark_spam: true
+    mark_read: true
+    discard: true
+    stop: true

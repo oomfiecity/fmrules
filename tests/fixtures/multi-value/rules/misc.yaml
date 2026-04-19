@@ -1,0 +1,11 @@
+rules:
+  - name: Multi-sender receipts
+    from: [alice@shop.com, bob@shop.com]
+    subjects:
+      - "Your order"
+      - "Your receipt"
+    file_in: Receipts
+
+  - name: Raw escape hatch
+    search_raw: "is:flagged from:vip@example.com"
+    file_in: Unsorted

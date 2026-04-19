@@ -1,0 +1,10 @@
+module: simplelogin
+description: "Expand from: through the SimpleLogin X-SimpleLogin-Original-From header"
+targets: from
+transform:
+  from:
+    or:
+      - from: "{value}"
+      - header:
+          name: X-SimpleLogin-Original-From
+          value: "{value}"
