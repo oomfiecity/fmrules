@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Argv, CommandModule } from 'yargs';
 import YAML from 'yaml';
 import { createContext } from '../context.ts';
+import { MATCHER_FIELDS } from '../schema/fields.ts';
 
 const PLURAL_TO_FIELD: Record<string, { field: string; key: 'any' | 'all' }> = {
   subjects: { field: 'subject', key: 'any' },
@@ -21,8 +22,14 @@ const builder = (y: Argv) =>
  * Walk every YAML map in the rule file (defaults, archetypes.*, rules[]) and
  * fold plural/_all keys into the singular field's nested form. Mutates the
  * Document in-place to preserve comments and surrounding key order.
+ *
+ * `CANONICAL_FIELDS` is the set of MatcherValue-shaped fields (the ones
+ * that can carry a `{any, all}` tree). Derived from the registry so new
+ * matcher fields automatically participate.
  */
-const CANONICAL_FIELDS = ['from', 'to', 'subject', 'body', 'with', 'list', 'text', 'domain'];
+const CANONICAL_FIELDS: readonly string[] = MATCHER_FIELDS
+  .filter((f) => f.shape === 'matcherValue')
+  .map((f) => f.yaml);
 
 function migrateMap(map: YAML.YAMLMap): boolean {
   let changed = false;

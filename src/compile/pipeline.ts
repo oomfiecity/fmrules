@@ -15,7 +15,7 @@ import { buildSearch } from './build-search.ts';
 import { render } from './render.ts';
 import { validateRule } from './validate.ts';
 import { assignSortOrder } from './sort.ts';
-import { reconcileLockfile, writeLockfile, type LockfileMap } from './lockfile.ts';
+import { readLockfileOptional, reconcileLockfile, writeLockfile, type LockfileMap } from './lockfile.ts';
 import { toEmitted } from './emit.ts';
 import { ruleFingerprint } from '../util/fingerprint.ts';
 
@@ -26,8 +26,6 @@ export interface PipelineOptions {
   pretty?: boolean;
   checkOnly?: boolean;
   strict?: boolean;
-  filterRule?: string;
-  format?: 'human' | 'json';
 }
 
 export async function runPipeline(ctx: Context, opts: PipelineOptions): Promise<void> {
@@ -137,30 +135,6 @@ function deriveCombinator(rule: PartialRule): 'all' | 'any' {
   if (rule.combinator) return rule.combinator;
   // A top-level OR in the search tree implies combinator=any.
   return rule.search?.kind === 'or' ? 'any' : 'all';
-}
-
-async function readLockfileOptional(ctx: Context): Promise<LockfileMap> {
-  const p = path.join(ctx.paths.meta, 'lockfile.json');
-  try {
-    const raw = await fs.readFile(p, 'utf8');
-    const parsed = JSON.parse(raw) as Record<string, Partial<LockfileMap[string]>>;
-    // Tolerate the pre-`updated` lockfile schema: default updated to created
-    // so the first compile after the schema change doesn't re-bump every rule.
-    const out: LockfileMap = {};
-    for (const [fp, entry] of Object.entries(parsed)) {
-      if (!entry || typeof entry.name !== 'string' || typeof entry.created !== 'string') continue;
-      out[fp] = {
-        name: entry.name,
-        created: entry.created,
-        updated: entry.updated ?? entry.created,
-      };
-    }
-    return out;
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    if (e.code === 'ENOENT') return {};
-    throw err;
-  }
 }
 
 export type { LoadedFile, LoadedMeta };

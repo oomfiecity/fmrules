@@ -49,10 +49,13 @@ function normalizeListId(value: string): string {
 /**
  * Compile a single matcher value into an IR node. `toLeaf` builds the
  * terminal node for a single string value (`v => field('from', v)`,
- * `v => phrase(v)`, etc.). `combineOr` builds an OR group from leaves —
- * defaults to `or(...)`. Returns null when the value contributes nothing.
+ * `v => phrase(v)`, etc.). Returns null when the value contributes nothing.
+ *
+ * Exported so declarative-module's `applyToRule` can reuse the same
+ * MatcherValue → IR walk (with a `toLeaf` that runs the transform per
+ * value), inheriting the correct `{any, all}` AND-of-groups semantics.
  */
-function compileMatcherValue(
+export function compileMatcherValue(
   val: MatcherValue,
   toLeaf: (v: string) => SearchNode,
 ): SearchNode | null {

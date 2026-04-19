@@ -138,4 +138,42 @@ describe('buildDeclarativeModule', () => {
     const [out] = mod.apply([mkRule('user+$1@example.com')], {}, modCtx) as PartialRule[];
     expect(render(out!.extraSearch![0]!)).toBe('from:user+$1@example.com');
   });
+
+  test('{all: [a, b]} matcher AND-joins per-value transforms (not OR)', () => {
+    const mod = buildDeclarativeModule(simpleLogin);
+    const rule: PartialRule = {
+      name: 't',
+      hasOwnMatchers: true,
+      matchers: { from: { all: ['a.com', 'b.com'] } },
+      actions: { fileIn: 'Inbox' },
+      meta: { file: 't.yaml', fileIndex: 0, fanoutIndex: 0 },
+    };
+    const [out] = mod.apply([rule], {}, modCtx) as PartialRule[];
+    const rendered = render(out!.extraSearch![0]!);
+    // Two transforms AND-joined; each transform is itself an OR group over
+    // the direct from + header alternative.
+    expect(rendered).toBe(
+      '(from:a.com OR header:"X-SimpleLogin-Original-From:a.com") ' +
+        '(from:b.com OR header:"X-SimpleLogin-Original-From:b.com")',
+    );
+  });
+
+  test('{any: [a], all: [b]} matcher → AND of (any leaf, all leaf)', () => {
+    const mod = buildDeclarativeModule({
+      module: 'alias-anyall',
+      targets: 'from',
+      transform: { from: { from: '{value}' } },
+    });
+    const rule: PartialRule = {
+      name: 't',
+      hasOwnMatchers: true,
+      matchers: { from: { any: ['a.com'], all: ['b.com'] } },
+      actions: { fileIn: 'Inbox' },
+      meta: { file: 't.yaml', fileIndex: 0, fanoutIndex: 0 },
+    };
+    const [out] = mod.apply([rule], {}, modCtx) as PartialRule[];
+    // AND across the any-group and each all-member; any-group with one
+    // element collapses to the bare leaf.
+    expect(render(out!.extraSearch![0]!)).toBe('from:a.com from:b.com');
+  });
 });

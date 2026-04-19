@@ -11,8 +11,7 @@
 import type { Module } from '../module.ts';
 import type { DeclarativeModuleYaml } from '../schema/yaml.ts';
 import type { Matchers, MatcherValue, PartialRule, SearchExpr } from '../types.ts';
-import { compileSearchExpr } from './build-search.ts';
-import { or as irOr, type SearchNode } from './search-ir.ts';
+import { compileMatcherValue, compileSearchExpr } from './build-search.ts';
 
 
 type MatcherKey = keyof Matchers;
@@ -76,7 +75,11 @@ function interpolateSearchExpr(expr: SearchExpr, value: string): SearchExpr {
  * Replace a matcher field's values on a rule using the module's transform.
  * Produces a SearchNode IR tree pushed onto the rule's extraSearch list;
  * the original matcher value is removed so buildSearch doesn't also emit it.
- * Multiple matcher values are OR-joined.
+ *
+ * Per-value IR composition is delegated to `compileMatcherValue`, the same
+ * helper buildSearch uses — so string / string[] / `{any, all}` all compose
+ * identically here as there. Each leaf runs `compileSearchExpr` on the
+ * interpolated transform tree for that one value.
  */
 function applyToRule(
   rule: PartialRule,
@@ -86,25 +89,23 @@ function applyToRule(
   const m = rule.matchers;
   const current = m[targetKey];
   if (current === undefined) return rule;
+  // Header-typed matchers: declarative modules don't target `header:`.
+  if (
+    current &&
+    typeof current === 'object' &&
+    !Array.isArray(current) &&
+    'name' in current
+  ) {
+    return rule;
+  }
 
-  let values: string[] = [];
-  if (typeof current === 'string') values = [current];
-  else if (Array.isArray(current)) values = current.filter((v): v is string => typeof v === 'string');
-  else if (current && typeof current === 'object' && !('name' in current)) {
-    // TODO: `{any, all}` flatten-to-OR is a latent bug; `all` members
-    // should AND-join, not OR-join with `any`. No current rule triggers it.
-    const v = current as { any?: string[]; all?: string[] };
-    values = [...(v.any ?? []), ...(v.all ?? [])];
-  } else return rule; // header objects — declarative modules don't target `header:`
-
-  if (values.length === 0) return rule;
-
-  const branches = values.map((v) => compileSearchExpr(interpolateSearchExpr(transformTree, v), rule));
-  const bundled: SearchNode = branches.length === 1 ? branches[0]! : irOr(...branches);
+  const bundled = compileMatcherValue(current as MatcherValue, (v) =>
+    compileSearchExpr(interpolateSearchExpr(transformTree, v), rule),
+  );
+  if (!bundled) return rule;
 
   const nextMatchers: Matchers = { ...m };
   delete nextMatchers[targetKey];
-
   return {
     ...rule,
     matchers: nextMatchers,

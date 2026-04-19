@@ -79,3 +79,29 @@ export async function writeLockfile(ctx: Context, lockfile: LockfileMap): Promis
   const full = path.join(dir, 'lockfile.json');
   await fs.writeFile(full, JSON.stringify(sorted, null, 2) + '\n', 'utf8');
 }
+
+/**
+ * Read meta/lockfile.json. Missing file → `{}`. Tolerates the pre-`updated`
+ * schema by defaulting `updated` to `created`, so the first compile after
+ * the schema change doesn't re-bump every rule.
+ */
+export async function readLockfileOptional(ctx: Context): Promise<LockfileMap> {
+  const p = path.join(ctx.paths.meta, 'lockfile.json');
+  try {
+    const raw = await fs.readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, Partial<LockfileEntry>>;
+    const out: LockfileMap = {};
+    for (const [fp, entry] of Object.entries(parsed)) {
+      if (!entry || typeof entry.name !== 'string' || typeof entry.created !== 'string') continue;
+      out[fp] = {
+        name: entry.name,
+        created: entry.created,
+        updated: entry.updated ?? entry.created,
+      };
+    }
+    return out;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw err;
+  }
+}

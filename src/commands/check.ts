@@ -5,8 +5,6 @@ import { runPipeline } from '../compile/pipeline.ts';
 const builder = (y: Argv) =>
   y.options({
     strict: { type: 'boolean', default: false, describe: 'Treat warnings as errors' },
-    rule: { type: 'string', describe: 'Limit check to rules matching this name (glob)' },
-    format: { choices: ['human', 'json'] as const, default: 'human' as const },
   });
 
 const handler: CommandModule['handler'] = async (argv) => {
@@ -22,8 +20,6 @@ const handler: CommandModule['handler'] = async (argv) => {
     await runPipeline(ctx, {
       checkOnly: true,
       strict: argv.strict as boolean,
-      filterRule: argv.rule as string | undefined,
-      format: argv.format as 'human' | 'json',
     });
     ctx.log.info('All rules passed validation.');
   } catch (err) {

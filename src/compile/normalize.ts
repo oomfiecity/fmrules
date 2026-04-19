@@ -40,14 +40,8 @@ function pick<T extends object>(src: object, kind: FieldKind): T {
 const pickMatchers = (src: object): Matchers => pick<Matchers>(src, 'matcher');
 const pickActions = (src: object): Actions => pick<Actions>(src, 'action');
 
-function mergeMatchers(...layers: Matchers[]): Matchers {
-  const out: Matchers = {};
-  for (const layer of layers) Object.assign(out, layer);
-  return out;
-}
-
-function mergeActions(...layers: Actions[]): Actions {
-  const out: Actions = {};
+function mergeLayers<T extends object>(...layers: T[]): T {
+  const out = {} as T;
   for (const layer of layers) Object.assign(out, layer);
   return out;
 }
@@ -115,20 +109,20 @@ export function normalizeRule({
     : undefined;
   if (rule.archetype && !archetype) {
     throw new Error(
-      `Rule "${rule.name}" references unknown archetype "${rule.archetype}"`,
+      `Rule "${rule.name}" (${meta.file}): references unknown archetype "${rule.archetype}"`,
     );
   }
 
   const ownMatchers = pickMatchers(rule);
   const hasOwnMatchers = Object.keys(ownMatchers).length > 0;
 
-  const matchers = mergeMatchers(
+  const matchers = mergeLayers<Matchers>(
     pickMatchers(defaults ?? {}),
     pickMatchers(archetype ?? {}),
     ownMatchers,
   );
 
-  const actions = mergeActions(
+  const actions = mergeLayers<Actions>(
     pickActions(defaults ?? {}),
     pickActions(archetype ?? {}),
     pickActions(rule),
