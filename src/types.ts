@@ -9,23 +9,40 @@
 import type { SearchNode } from './compile/search-ir.ts';
 
 /**
- * Rule-level match tree — cross-field OR / AND composition.
- * `any:` branches OR-join; `all:` branches AND-join. Leaves are
- * single-value matchers.
+ * Canonical matcher value. `any` OR-joins; `all` AND-joins; both → AND of
+ * the two groups. Bare string and bare list are sugar for `{any: [v]}` /
+ * `{any: [...]}`.
  */
-export type MatchTree =
-  | { any: MatchTree[] }
-  | { all: MatchTree[] }
-  | { from: string }
-  | { to: string }
-  | { subject: string }
-  | { body: string }
-  | { with: string }
-  | { list: string }
-  | { text: string }
+export type MatcherValue =
+  | string
+  | string[]
+  | { any?: string[]; all?: string[] };
+
+/**
+ * Shared search-expression grammar — cross-field OR / AND composition.
+ * `any:` branches OR-join; `all:` branches AND-join. Leaf values accept
+ * the same string / list / `{any, all}` shapes as flat matchers. Used by
+ * rule `match:` trees and declarative module `transform:` trees.
+ */
+export type SearchExpr =
+  | { any: SearchExpr[] }
+  | { all: SearchExpr[] }
+  | { from: MatcherValue }
+  | { to: MatcherValue }
+  | { subject: MatcherValue }
+  | { body: MatcherValue }
+  | { with: MatcherValue }
+  | { list: MatcherValue }
+  | { text: MatcherValue }
+  | { domain: MatcherValue }
   | { header: { name: string; value: string } }
   | { raw: string };
 
+/**
+ * Action fields on a rule. Keep in sync with `src/schema/fields.ts` —
+ * `tests/field-registry.test.ts` asserts parity with every `kind: 'action'`
+ * row and with `EmittedRule` below.
+ */
 export interface Actions {
   skipInbox?: boolean;
   markRead?: boolean;
@@ -40,22 +57,11 @@ export interface Actions {
 }
 
 /**
- * Canonical matcher value. `any` OR-joins; `all` AND-joins; both → AND of
- * the two groups. Bare string and bare list are equivalent to `{any: [v]}`
- * / `{any: [...]}` and are accepted as authoring sugar.
- */
-export type MatcherValue =
-  | string
-  | string[]
-  | { any?: string[]; all?: string[] };
-
-/**
- * Matcher fields as they appeared in YAML, normalized to the canonical
- * shape. Modules can edit these directly.
+ * Matcher fields on a rule, post-normalization. Modules can edit these
+ * directly. Distinct fields AND-join at the top level in buildSearch.
  *
- * Plurals (`subjects`, `bodies`) and `_all` suffixes are normalized away
- * by pickMatchers — the internal Matchers only carries the singular form.
- * Distinct fields are AND-joined at the top level by buildSearch.
+ * Keep in sync with `src/schema/fields.ts` — `tests/field-registry.test.ts`
+ * asserts every `kind: 'matcher'` row has a matching key here.
  */
 export interface Matchers {
   from?: MatcherValue;
@@ -63,7 +69,7 @@ export interface Matchers {
   subject?: MatcherValue;
   body?: MatcherValue;
   header?: { name: string; value: string } | Array<{ name: string; value: string }>;
-  match?: MatchTree;
+  match?: SearchExpr;
   list?: MatcherValue;
   with?: MatcherValue;
   text?: MatcherValue;
@@ -110,6 +116,13 @@ export interface PartialRule {
   /** Set by buildSearch; modules generally don't touch this. */
   search?: SearchNode;
   actions: Actions;
+  /**
+   * Absolute position in the final execution order. Assigned by
+   * `assignSortOrder` using
+   *   base + meta.fileIndex * RULE_STRIDE + meta.fanoutIndex
+   * where `base` is the file's offset (see src/compile/sort.ts). An
+   * explicit `sort_order:` on the YAML rule overrides the formula.
+   */
   sortOrder?: number;
   meta: SourceMeta;
   /** Resolved chain of modules (post-dedup, post-subtract). */

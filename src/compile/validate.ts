@@ -11,12 +11,10 @@
 import type { Logger } from '../logger.ts';
 import type { PartialRule } from '../types.ts';
 import type { LoadedMeta } from './meta.ts';
-import {
-  parseSearch,
-  fullyConsumed,
-  walk,
-} from '../fastmail/parseSearch.ts';
+import { parseSearch, fullyConsumed } from '../fastmail/parseSearch.ts';
 import { forbiddenFields } from '../fastmail/valid-fields.ts';
+import { walk } from './search-ir.ts';
+import { render } from './render.ts';
 
 export interface ValidateOptions {
   strict: boolean;
@@ -69,20 +67,19 @@ function validateSearchString(ruleName: string, searchStr: string): void {
     );
   }
   for (const node of walk(tree)) {
-    if (node.type === 'field' && typeof node.value === 'string') {
-      if (forbiddenFields.has(node.value)) {
-        throw new Error(
-          `Rule "${ruleName}": search uses forbidden field "${node.value}:" — Fastmail strips these silently at rule import.`,
-        );
-      }
+    if (node.kind === 'field' && forbiddenFields.has(node.field)) {
+      throw new Error(
+        `Rule "${ruleName}": search uses forbidden field "${node.field}:" — Fastmail strips these silently at rule import.`,
+      );
     }
   }
-  // Idempotence check: printed tree should re-parse to an equivalent tree.
-  const printed = tree.print();
-  const reparsed = parseSearch(printed);
-  if (!reparsed || reparsed.print() !== printed) {
+  // Idempotence: rendering the parsed tree and re-parsing must be a fixed
+  // point — guarantees Fastmail's grammar reads the string as we intended.
+  const rendered = render(tree);
+  const reparsed = parseSearch(rendered);
+  if (!reparsed || render(reparsed) !== rendered) {
     throw new Error(
-      `Rule "${ruleName}": search failed round-trip re-parse. Original=${searchStr} | printed=${printed}`,
+      `Rule "${ruleName}": search failed round-trip re-parse. Original=${searchStr} | rendered=${rendered}`,
     );
   }
 }

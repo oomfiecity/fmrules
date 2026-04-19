@@ -1,10 +1,10 @@
 rules:
   - name: Multi-sender receipts
-    from: [alice@shop.com, bob@shop.com]
-    subjects:
-      - "Your order"
-      - "Your receipt"
+    from: [ alice@shop.com, bob@shop.com ]
     file_in: Receipts
+    subject:
+      - Your order
+      - Your receipt
 
   - name: Raw escape hatch
     search_raw: "is:flagged from:vip@example.com"

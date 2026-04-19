@@ -1,12 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { buildDeclarativeModule } from '../src/compile/declarative-module.ts';
 import { render } from '../src/compile/render.ts';
+import type { Context } from '../src/context.ts';
 import type { PartialRule } from '../src/types.ts';
 import type { DeclarativeModuleYaml } from '../src/schema/yaml.ts';
 
-const modCtx = {
+const modCtx: Context = {
   paths: { cwd: '.', rules: '.', meta: '.' },
-  log: { warn: () => {}, info: () => {} },
+  log: {
+    error: () => {},
+    warn: () => {},
+    info: () => {},
+    debug: () => {},
+    trace: () => {},
+  },
 };
 
 function mkRule(from: string | string[]): PartialRule {
@@ -24,7 +31,7 @@ const simpleLogin: DeclarativeModuleYaml = {
   targets: 'from',
   transform: {
     from: {
-      or: [
+      any: [
         { from: '{value}' },
         { header: { name: 'X-SimpleLogin-Original-From', value: '{value}' } },
       ],
@@ -86,5 +93,49 @@ describe('buildDeclarativeModule', () => {
         transform: { nonsense: { from: '{value}' } },
       }),
     ).toThrow(/unknown target field/);
+  });
+
+  test('domain leaf applies @-wrapping via the shared compiler', () => {
+    const mod = buildDeclarativeModule({
+      module: 'domain-bridge',
+      targets: 'from',
+      transform: { from: { domain: '{value}' } },
+    });
+    const [out] = mod.apply([mkRule('anthropic.com')], {}, modCtx) as PartialRule[];
+    expect(render(out!.extraSearch![0]!)).toBe('from:@anthropic.com');
+  });
+
+  test('list leaf applies <>-wrapping via normalizeListId', () => {
+    const mod = buildDeclarativeModule({
+      module: 'list-bridge',
+      targets: 'from',
+      transform: { from: { list: '{value}' } },
+    });
+    const [out] = mod.apply([mkRule('list.example.com')], {}, modCtx) as PartialRule[];
+    expect(render(out!.extraSearch![0]!)).toBe('list:<list.example.com>');
+  });
+
+  test('MatcherValue leaf: {any} interpolates into every string position', () => {
+    const mod = buildDeclarativeModule({
+      module: 'alias-expander',
+      targets: 'from',
+      transform: {
+        from: { from: { any: ['{value}', 'alias-{value}'] } },
+      },
+    });
+    const [out] = mod.apply([mkRule('anthropic.com')], {}, modCtx) as PartialRule[];
+    expect(render(out!.extraSearch![0]!)).toBe(
+      'from:anthropic.com OR from:alias-anthropic.com',
+    );
+  });
+
+  test('interpolation preserves $ in value (no regex back-reference corruption)', () => {
+    const mod = buildDeclarativeModule({
+      module: 'dollar-test',
+      targets: 'from',
+      transform: { from: { from: '{value}' } },
+    });
+    const [out] = mod.apply([mkRule('user+$1@example.com')], {}, modCtx) as PartialRule[];
+    expect(render(out!.extraSearch![0]!)).toBe('from:user+$1@example.com');
   });
 });

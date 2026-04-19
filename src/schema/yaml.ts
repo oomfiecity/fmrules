@@ -8,6 +8,15 @@
 
 import { z } from 'zod';
 
+import {
+  FIELDS,
+  type ActionField,
+  type FieldKind,
+  type FieldShape,
+  type FieldSpec,
+  type MatcherField,
+} from './fields.ts';
+
 /** A module reference: `simplelogin` or `{ name: vip, args: {...} }`. */
 export const ModuleRefSchema = z.union([
   z.string(),
@@ -24,36 +33,9 @@ export const HeaderMatcherSchema = z.object({
 });
 
 /**
- * Rule-level `match:` tree for cross-field OR / AND composition.
- *
- * `any:` → OR group; `all:` → AND group. Leaves are single-value matchers.
- * Compiles via build-search. AND-joined with any flat matchers on the rule.
- */
-export const MatchTreeSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.object({ any: z.array(MatchTreeSchema) }),
-    z.object({ all: z.array(MatchTreeSchema) }),
-    z.object({ from: z.string() }),
-    z.object({ to: z.string() }),
-    z.object({ subject: z.string() }),
-    z.object({ body: z.string() }),
-    z.object({ with: z.string() }),
-    z.object({ list: z.string() }),
-    z.object({ text: z.string() }),
-    z.object({ header: HeaderMatcherSchema }),
-    z.object({ raw: z.string() }),
-  ]),
-);
-
-/**
- * A scalar matcher value. The canonical form is `{any?: [...], all?: [...]}`
- * (any-list OR-joins; all-list AND-joins; combined → AND of the two groups).
- * A bare string or list is sugar for the same.
- *
- * Plurals (`subjects`, `bodies`) and `_all` suffixes (`subject_all`,
- * `body_all`) are legacy sugar — kept for backward compat, normalized into
- * the canonical singular form at pickMatchers time. Use `fmrules migrate`
- * to convert files in place.
+ * A scalar matcher value. Canonical form is `{any?: [...], all?: [...]}`
+ * (`any` OR-joins, `all` AND-joins; combined → AND of the two groups).
+ * A bare string or bare list is sugar for `{any: [v]}` / `{any: [...]}`.
  */
 const NestedMatcherShape = z
   .object({
@@ -72,36 +54,105 @@ const MatcherValueSchema = z.union([
   NestedMatcherShape,
 ]);
 
-export const MatchersSchema = z.object({
-  from: MatcherValueSchema.optional(),
-  to: MatcherValueSchema.optional(),
-  subject: MatcherValueSchema.optional(),
-  subjects: z.array(z.string()).optional(),
-  subject_all: z.array(z.string()).optional(),
-  body: MatcherValueSchema.optional(),
-  bodies: z.array(z.string()).optional(),
-  body_all: z.array(z.string()).optional(),
-  header: z.union([HeaderMatcherSchema, z.array(HeaderMatcherSchema)]).optional(),
-  match: MatchTreeSchema.optional(),
-  list: MatcherValueSchema.optional(),
-  with: MatcherValueSchema.optional(),
-  text: MatcherValueSchema.optional(),
-  domain: MatcherValueSchema.optional(),
-  search_raw: z.string().optional(),
-});
+/**
+ * Shared search-expression grammar used by rule `match:` trees and
+ * declarative module `transform:` trees.
+ *
+ * `any:` → OR group; `all:` → AND group. Leaves are field matchers whose
+ * values accept the same string / list / `{any, all}` shapes as flat
+ * matchers. Compiles to SearchNode IR via `compileSearchExpr`.
+ */
+export const SearchExprSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.object({ any: z.array(SearchExprSchema) }),
+    z.object({ all: z.array(SearchExprSchema) }),
+    z.object({ from: MatcherValueSchema }),
+    z.object({ to: MatcherValueSchema }),
+    z.object({ subject: MatcherValueSchema }),
+    z.object({ body: MatcherValueSchema }),
+    z.object({ with: MatcherValueSchema }),
+    z.object({ list: MatcherValueSchema }),
+    z.object({ text: MatcherValueSchema }),
+    z.object({ domain: MatcherValueSchema }),
+    z.object({ header: HeaderMatcherSchema }),
+    z.object({ raw: z.string() }),
+  ]),
+);
 
-export const ActionsSchema = z.object({
-  skip_inbox: z.boolean().optional(),
-  mark_read: z.boolean().optional(),
-  mark_flagged: z.boolean().optional(),
-  show_notification: z.boolean().optional(),
-  file_in: z.string().nullable().optional(),
-  redirect_to: z.union([z.string(), z.array(z.string())]).nullable().optional(),
-  snooze_until: z.object({ date: z.string() }).nullable().optional(),
-  discard: z.boolean().optional(),
-  mark_spam: z.boolean().optional(),
-  stop: z.boolean().optional(),
-});
+/**
+ * Map a `FieldSpec.shape` (and `nullable`) to a zod schema. Keeps schema
+ * definition colocated with the field registry so adding a new shape only
+ * requires editing this file plus `fields.ts`.
+ */
+function zodForField(f: FieldSpec): z.ZodTypeAny {
+  let base: z.ZodTypeAny;
+  switch (f.shape) {
+    case 'matcherValue':
+      base = MatcherValueSchema;
+      break;
+    case 'bool':
+      base = z.boolean();
+      break;
+    case 'string':
+      base = z.string();
+      break;
+    case 'stringOrList':
+      base = z.union([z.string(), z.array(z.string())]);
+      break;
+    case 'header':
+      base = z.union([HeaderMatcherSchema, z.array(HeaderMatcherSchema)]);
+      break;
+    case 'searchExpr':
+      base = SearchExprSchema;
+      break;
+    case 'snooze':
+      base = z.object({ date: z.string() });
+      break;
+    case 'raw':
+      base = z.string();
+      break;
+  }
+  return f.nullable ? base.nullable() : base;
+}
+
+/**
+ * Type-level map from `FieldShape` → the runtime zod type `zodForField`
+ * produces for that shape. Used to derive `MatchersShape` / `ActionsShape`
+ * so that `z.infer<typeof MatchersSchema>` retains literal field keys.
+ */
+type ShapeToZod<S extends FieldShape> =
+  S extends 'matcherValue' ? typeof MatcherValueSchema
+  : S extends 'bool' ? z.ZodBoolean
+  : S extends 'string' ? z.ZodString
+  : S extends 'stringOrList' ? z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString>]>
+  : S extends 'header' ? z.ZodUnion<[typeof HeaderMatcherSchema, z.ZodArray<typeof HeaderMatcherSchema>]>
+  : S extends 'searchExpr' ? z.ZodType<unknown>
+  : S extends 'snooze' ? z.ZodObject<{ date: z.ZodString }>
+  : S extends 'raw' ? z.ZodString
+  : never;
+
+type NullableIf<F extends FieldSpec, T extends z.ZodTypeAny> =
+  F extends { nullable: true } ? z.ZodNullable<T> : T;
+
+type FieldToZod<F extends FieldSpec> = z.ZodOptional<NullableIf<F, ShapeToZod<F['shape']>>>;
+
+type ShapeFor<F extends FieldSpec> = { [K in F as K['yaml']]: FieldToZod<K> };
+
+type MatchersShape = ShapeFor<MatcherField>;
+type ActionsShape = ShapeFor<ActionField>;
+
+function buildFieldSchema<S extends z.ZodRawShape>(kind: FieldKind): S {
+  const shape: z.ZodRawShape = {};
+  for (const f of FIELDS) {
+    if (f.kind !== kind) continue;
+    shape[f.yaml] = zodForField(f).optional();
+  }
+  return shape as S;
+}
+
+export const MatchersSchema = z.object(buildFieldSchema<MatchersShape>('matcher'));
+
+export const ActionsSchema = z.object(buildFieldSchema<ActionsShape>('action'));
 
 const RuleFieldsSchema = MatchersSchema.merge(ActionsSchema).extend({
   name: z.string().optional(),
@@ -149,32 +200,13 @@ export type ConfigYaml = z.infer<typeof ConfigSchema>;
  * Module at load time by meta.ts.
  *
  * `targets` names which matcher field(s) the transform applies to.
- * `{value}` in the transform tree is interpolated with the field's
- * concrete value at compile time.
+ * `{value}` in any string position inside the transform tree is
+ * interpolated with the target matcher's concrete value at compile time.
  */
-export const DeclarativeTransformSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.object({ or: z.array(DeclarativeTransformSchema) }),
-    z.object({ and: z.array(DeclarativeTransformSchema) }),
-    z.object({ from: z.string() }),
-    z.object({ to: z.string() }),
-    z.object({ subject: z.string() }),
-    z.object({ body: z.string() }),
-    z.object({
-      header: z.object({
-        name: z.string(),
-        contains: z.string().optional(),
-        value: z.string().optional(),
-      }),
-    }),
-    z.object({ raw: z.string() }),
-  ]),
-);
-
 export const DeclarativeModuleSchema = z.object({
   module: z.string(),
   description: z.string().optional(),
   targets: z.union([z.string(), z.array(z.string())]),
-  transform: z.record(z.string(), DeclarativeTransformSchema),
+  transform: z.record(z.string(), SearchExprSchema),
 });
 export type DeclarativeModuleYaml = z.infer<typeof DeclarativeModuleSchema>;

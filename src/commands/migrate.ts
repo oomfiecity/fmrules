@@ -59,17 +59,15 @@ function migrateMap(map: YAML.YAMLMap): boolean {
       nested = existing;
     } else {
       nested = new YAML.YAMLMap();
-      const anyValues: string[] = [];
-      const allValues: string[] = [];
+      const anySeq = new YAML.YAMLSeq();
       if (YAML.isScalar(existing) && typeof existing.value === 'string') {
-        anyValues.push(existing.value);
+        anySeq.add(existing.value);
       } else if (YAML.isSeq(existing)) {
         for (const it of existing.items) {
-          if (YAML.isScalar(it) && typeof it.value === 'string') anyValues.push(it.value);
+          if (YAML.isScalar(it) && typeof it.value === 'string') anySeq.add(it.value);
         }
       }
-      if (anyValues.length > 0) nested.set('any', anyValues);
-      if (allValues.length > 0) nested.set('all', allValues);
+      if (anySeq.items.length > 0) nested.set('any', anySeq);
     }
 
     const bucketKey = target.key;

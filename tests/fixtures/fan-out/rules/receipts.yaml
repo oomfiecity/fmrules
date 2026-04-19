@@ -1,6 +1,9 @@
 rules:
   - name: Receipts fan-out
     from: shop.com
-    subjects: [Order, Receipt, Invoice]
     file_in: Receipts
-    use: [split]
+    use: [ split ]
+    subject:
+      - Order
+      - Receipt
+      - Invoice

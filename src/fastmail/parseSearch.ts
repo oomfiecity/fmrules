@@ -1,9 +1,9 @@
 /**
- * Adapted from Fastmail's open-source parseSearch.js. Used here solely
- * as a validator: we parse the rendered search string, normalize the
- * resulting tree, and `.print()` it back. If the round-trip fails or
- * the parse is non-strict (leaves input unconsumed), the search string
- * would be mis-interpreted by Fastmail's rule engine and we reject it.
+ * Adapted from Fastmail's open-source parseSearch.js. Exposed publicly as
+ * a boundary adapter: string → SearchNode IR. Used by the validator to
+ * round-trip rendered search strings through Fastmail's grammar and confirm
+ * they parse stably. `SearchTreeNode` is the grammar-internal tree; the
+ * module's public surface is SearchNode-only.
  *
  * Omissions from the original:
  *   - `getSearchOperators` / `walkOperators` (metrics — not needed).
@@ -13,6 +13,15 @@
  * Source file: fastmail-oss-excerpts/parseSearch.js.
  */
 
+import {
+  and as irAnd,
+  field as irField,
+  not as irNot,
+  or as irOr,
+  phrase as irPhrase,
+  raw as irRaw,
+  type SearchNode,
+} from '../compile/search-ir.ts';
 import {
   define,
   firstMatch,
@@ -167,7 +176,7 @@ const fieldNames: Record<string, string> = {
   rfc822msgid: 'msgid',
 };
 
-export class SearchTreeNode {
+class SearchTreeNode {
   type: TreeNodeType | string;
   value: string | boolean | null;
   children: SearchTreeNode[] | null;
@@ -452,11 +461,11 @@ function fromTokens(tokens: Array<[string, string]>): SearchTreeNode {
 export function parseSearch(
   input: string,
   opts: NormaliseOptions = {},
-): SearchTreeNode | null {
+): SearchNode | null {
   const p = new ParseResult(input.replace(/[\u201C\u201D]/g, '"'));
   search(p);
-  const tree = fromTokens(p.tokens);
-  return tree.normalise(opts.singularNot);
+  const tree = fromTokens(p.tokens).normalise(opts.singularNot);
+  return tree ? toSearchNode(tree) : null;
 }
 
 /**
@@ -470,11 +479,54 @@ export function fullyConsumed(input: string): boolean {
   return p.pos === p.input.length;
 }
 
-/** Walk tree yielding every node (pre-order). */
-export function* walk(node: SearchTreeNode | null): Generator<SearchTreeNode> {
-  if (!node) return;
-  yield node;
-  if (node.children) {
-    for (const c of node.children) yield* walk(c);
+/**
+ * Map the grammar's SearchTreeNode onto the SearchNode IR. Runs after
+ * `normalise`, so the input tree is already deduplicated, flattened, and
+ * has no empty groups. Boolean tokens (is:read, has:attachment, …) and
+ * other kinds without first-class IR shapes collapse to `raw` — the tree's
+ * own `.print()` is used so the rendered form is the post-normalise
+ * canonical spelling (e.g. `is:flagged` → `is:pinned`).
+ */
+function toSearchNode(tree: SearchTreeNode): SearchNode {
+  switch (tree.type) {
+    case 'AND':
+      return irAnd(...(tree.children ?? []).map(toSearchNode));
+    case 'OR':
+      return irOr(...(tree.children ?? []).map(toSearchNode));
+    case 'NOT': {
+      const children = tree.children ?? [];
+      if (children.length === 1) return irNot(toSearchNode(children[0]!));
+      // Multi-child NOT = `NOT a NOT b` = each child individually negated,
+      // joined by AND. normalise produces this when collapsing AND-of-NOTs
+      // (see normaliseBinaryOp line ~233) or pushing NOT through an OR
+      // (see normalise line ~219).
+      return irAnd(...children.map((c) => irNot(toSearchNode(c))));
+    }
+    case 'field': {
+      const name = String(tree.value);
+      const child = tree.children?.[0];
+      if (child && (child.type === 'word' || child.type === 'phrase')) {
+        return irField(name, String(child.value ?? ''));
+      }
+      // Group children (e.g. `from:(a OR b)`) — buildSearch never emits
+      // this, but round-trip fidelity is preserved by a raw fallback.
+      return irRaw(tree.print());
+    }
+    case 'word':
+    case 'phrase':
+      return irPhrase(String(tree.value ?? ''));
+    case 'seen':
+    case 'flagged':
+    case 'draft':
+    case 'answered':
+    case 'muted':
+    case 'followed':
+    case 'attachment':
+    case 'userLabels':
+    case 'hasmemo':
+    case 'memo':
+      return irRaw(tree.print());
+    default:
+      throw new Error(`parseSearch: unhandled node type "${tree.type}"`);
   }
 }

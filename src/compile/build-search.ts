@@ -8,7 +8,7 @@
  * `search_raw` appends as a raw node.
  */
 
-import type { MatchTree, MatcherValue, PartialRule } from '../types.ts';
+import type { MatcherValue, PartialRule, SearchExpr } from '../types.ts';
 import {
   and,
   field,
@@ -23,6 +23,10 @@ import {
 function asArray<T>(v: T | T[] | undefined): T[] {
   if (v === undefined) return [];
   return Array.isArray(v) ? v : [v];
+}
+
+function ruleErr(rule: PartialRule, msg: string): Error {
+  return new Error(`Rule "${rule.name}" (${rule.meta.file}): ${msg}`);
 }
 
 function fieldGroup(f: SearchField, values: string[]): SearchNode | null {
@@ -70,27 +74,49 @@ function compileMatcherValue(
   return and(...parts);
 }
 
-function compileMatchTree(node: MatchTree): SearchNode {
+function compileMatchLeaf(
+  val: MatcherValue,
+  toLeaf: (v: string) => SearchNode,
+  fieldName: string,
+  rule: PartialRule,
+): SearchNode {
+  const compiled = compileMatcherValue(val, toLeaf);
+  if (compiled === null) {
+    throw ruleErr(rule, `match.${fieldName} cannot be empty`);
+  }
+  return compiled;
+}
+
+/**
+ * Compile the shared SearchExpr grammar (rule `match:` and declarative
+ * module `transform:`) to SearchNode IR. Leaves delegate to
+ * `compileMatchLeaf`, so every leaf kind accepts the full MatcherValue
+ * value shape (string | string[] | {any, all}). `rule` is threaded through
+ * recursion so thrown errors carry rule-name + file context at the throw
+ * site — no outer wrapping needed.
+ */
+export function compileSearchExpr(node: SearchExpr, rule: PartialRule): SearchNode {
   if ('any' in node) {
-    if (node.any.length === 0) throw new Error('match.any cannot be empty');
-    if (node.any.length === 1) return compileMatchTree(node.any[0]!);
-    return or(...node.any.map(compileMatchTree));
+    if (node.any.length === 0) throw ruleErr(rule, 'match.any cannot be empty');
+    if (node.any.length === 1) return compileSearchExpr(node.any[0]!, rule);
+    return or(...node.any.map((c) => compileSearchExpr(c, rule)));
   }
   if ('all' in node) {
-    if (node.all.length === 0) throw new Error('match.all cannot be empty');
-    if (node.all.length === 1) return compileMatchTree(node.all[0]!);
-    return and(...node.all.map(compileMatchTree));
+    if (node.all.length === 0) throw ruleErr(rule, 'match.all cannot be empty');
+    if (node.all.length === 1) return compileSearchExpr(node.all[0]!, rule);
+    return and(...node.all.map((c) => compileSearchExpr(c, rule)));
   }
-  if ('from' in node) return field('from', node.from);
-  if ('to' in node) return field('to', node.to);
-  if ('subject' in node) return field('subject', node.subject);
-  if ('body' in node) return field('body', node.body);
-  if ('with' in node) return field('with', node.with);
-  if ('list' in node) return field('list', normalizeListId(node.list));
-  if ('text' in node) return phrase(node.text);
+  if ('from' in node) return compileMatchLeaf(node.from, (v) => field('from', v), 'from', rule);
+  if ('to' in node) return compileMatchLeaf(node.to, (v) => field('to', v), 'to', rule);
+  if ('subject' in node) return compileMatchLeaf(node.subject, (v) => field('subject', v), 'subject', rule);
+  if ('body' in node) return compileMatchLeaf(node.body, (v) => field('body', v), 'body', rule);
+  if ('with' in node) return compileMatchLeaf(node.with, (v) => field('with', v), 'with', rule);
+  if ('list' in node) return compileMatchLeaf(node.list, (v) => field('list', normalizeListId(v)), 'list', rule);
+  if ('text' in node) return compileMatchLeaf(node.text, (v) => phrase(v), 'text', rule);
+  if ('domain' in node) return compileMatchLeaf(node.domain, (v) => field('from', `@${v}`), 'domain', rule);
   if ('header' in node) return headerNode(node.header.name, node.header.value);
   if ('raw' in node) return raw(node.raw);
-  throw new Error(`Unrecognized match tree node: ${JSON.stringify(node)}`);
+  throw ruleErr(rule, `unrecognized search expression node: ${JSON.stringify(node)}`);
 }
 
 export function buildSearch(rule: PartialRule): SearchNode {
@@ -114,14 +140,14 @@ export function buildSearch(rule: PartialRule): SearchNode {
   if (m.text !== undefined) push(compileMatcherValue(m.text, (v) => phrase(v)));
   if (m.domain !== undefined) push(compileMatcherValue(m.domain, (v) => field('from', `@${v}`)));
 
-  if (m.match) parts.push(compileMatchTree(m.match));
+  if (m.match) parts.push(compileSearchExpr(m.match, rule));
 
   if (m.searchRaw) parts.push(raw(m.searchRaw));
 
   if (rule.extraSearch) parts.push(...rule.extraSearch);
 
   if (parts.length === 0) {
-    throw new Error(`Rule "${rule.name}" has no matchers`);
+    throw ruleErr(rule, 'has no matchers');
   }
   if (parts.length === 1) return parts[0]!;
   return and(...parts);

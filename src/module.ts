@@ -14,21 +14,8 @@
  */
 
 import type { z } from 'zod';
+import type { Context } from './context.ts';
 import type { PartialRule } from './types.ts';
-
-export interface ModuleContext {
-  /** Absolute paths resolved from CLI flags. */
-  paths: {
-    cwd: string;
-    rules: string;
-    meta: string;
-  };
-  /** Logger so modules can emit warnings without printing directly. */
-  log: {
-    warn: (msg: string) => void;
-    info: (msg: string) => void;
-  };
-}
 
 export interface Module<A = unknown> {
   name: string;
@@ -36,7 +23,7 @@ export interface Module<A = unknown> {
   schema?: z.ZodType<A>;
   /** Human-readable description (surfaced by `fmrules check`). */
   description?: string;
-  apply(rules: PartialRule[], args: A, ctx: ModuleContext): PartialRule[] | Promise<PartialRule[]>;
+  apply(rules: PartialRule[], args: A, ctx: Context): PartialRule[] | Promise<PartialRule[]>;
 }
 
 /**

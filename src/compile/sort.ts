@@ -39,6 +39,25 @@ export function assignSortOrder(
   rules.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 }
 
+/**
+ * After a module pass, re-assign `fanoutIndex` so siblings produced from
+ * the same parent stay adjacent under the parent's sort-order base. Lives
+ * beside the sort formula (`assignSortOrder` above) — fanoutIndex is only
+ * meaningful as an input to that formula.
+ */
+export function stampFanoutIndices(rules: PartialRule[], parent: PartialRule): PartialRule[] {
+  if (rules.length === 1) return rules;
+  return rules.map((r, i) => ({
+    ...r,
+    meta: {
+      ...r.meta,
+      file: parent.meta.file,
+      fileIndex: parent.meta.fileIndex,
+      fanoutIndex: i,
+    },
+  }));
+}
+
 function computeFileBases(files: LoadedFile[], config: ConfigYaml): Map<string, number> {
   const names = files.map((f) => f.name);
   const ordered = config.file_order ?? [];

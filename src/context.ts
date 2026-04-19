@@ -7,6 +7,16 @@ export interface Paths {
   meta: string;
 }
 
+/**
+ * Pipeline context. Modules receive this directly via `Module.apply`.
+ *
+ * Log-level usage guidance:
+ *   - `log.info` / `log.warn`  — user-facing surface. Default level.
+ *   - `log.error`              — avoid; throw an Error instead, the pipeline
+ *                                prints thrown errors with rule/file context.
+ *   - `log.debug` / `log.trace` — gated on `--verbose` / `--trace`; intended
+ *                                for pipeline-internal diagnostics.
+ */
 export interface Context {
   paths: Paths;
   log: Logger;

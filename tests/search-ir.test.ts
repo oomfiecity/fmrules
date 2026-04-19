@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import { and, field, flatten, header, not, or, phrase, raw } from '../src/compile/search-ir.ts';
+import {
+  and,
+  field,
+  flatten,
+  header,
+  not,
+  or,
+  phrase,
+  raw,
+  type SearchNode,
+} from '../src/compile/search-ir.ts';
 import { render } from '../src/compile/render.ts';
+import { parseSearch } from '../src/fastmail/parseSearch.ts';
 
 describe('render precedence', () => {
   test('OR inside AND is parenthesized', () => {
@@ -79,5 +90,31 @@ describe('flatten', () => {
       expect(f.children[0]!.kind).toBe('field');
       expect(f.children[1]!.kind).toBe('or');
     }
+  });
+});
+
+describe('parseSearch ∘ render round-trip', () => {
+  // Mirrors validate.ts's invariant: render → parse canonicalises (dedup,
+  // NOT pushed through OR, flagged→pinned etc.); a second parse of the
+  // canonical form must be a fixed point under render.
+  const cases: Array<[string, SearchNode]> = [
+    ['flat AND', and(field('from', 'a'), field('to', 'b'))],
+    ['flat OR', or(field('from', 'a'), field('from', 'b'))],
+    [
+      'OR inside AND',
+      and(field('from', 'a'), or(field('subject', 'x'), field('subject', 'y'))),
+    ],
+    ['leaf NOT', not(field('from', 'spam.com'))],
+    ['NOT over OR (normalises to per-child NOT)', not(or(field('from', 'a'), field('from', 'b')))],
+    ['header', header('X-Foo', 'bar')],
+    ['phrase with whitespace', phrase('hello world')],
+    ['field with quoted value', and(field('subject', 'a b'), field('from', 'x'))],
+    ['duplicate terms (parser dedups)', and(field('from', 'x'), field('from', 'x'))],
+  ];
+  test.each(cases)('%s', (_name, node) => {
+    const canonical = render(parseSearch(render(node))!);
+    const reparsed = parseSearch(canonical);
+    expect(reparsed).not.toBeNull();
+    expect(render(reparsed!)).toBe(canonical);
   });
 });

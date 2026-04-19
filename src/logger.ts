@@ -15,6 +15,10 @@ export interface LoggerOptions {
   color?: boolean;
 }
 
+/**
+ * Stream routing: `info` → stdout (user-facing pipeline status, pipeable);
+ * `warn` / `error` / `debug` / `trace` → stderr (problems + diagnostics).
+ */
 export function createLogger(opts: LoggerOptions = {}): Logger {
   const verbose = opts.verbose ?? 0;
   const quiet = opts.quiet ?? false;
@@ -32,7 +36,7 @@ export function createLogger(opts: LoggerOptions = {}): Logger {
       if (!quiet) console.error(yellow('warn: ') + msg);
     },
     info: (msg) => {
-      if (!quiet) console.error(cyan('info: ') + msg);
+      if (!quiet) console.log(cyan('info: ') + msg);
     },
     debug: (msg) => {
       if (verbose >= 1) console.error(gray('debug: ') + msg);

@@ -39,51 +39,52 @@ const GlobalArchetypesSchema = z.object({
   archetypes: z.record(z.string(), ArchetypeSchema),
 });
 
-async function loadGlobalArchetypes(ctx: Context): Promise<Record<string, ArchetypeYaml>> {
-  const p = path.join(ctx.paths.meta, 'archetypes.yaml');
+/**
+ * Read + parse + schema-check a single optional YAML file. ENOENT →
+ * `undefined` (caller supplies the default); parse or schema failure
+ * throws with the path-qualified label so the user sees which file broke.
+ */
+async function loadOptionalYaml<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  label: string,
+): Promise<T | undefined> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(p, 'utf8');
-    const parsed = YAML.parse(raw);
-    const result = GlobalArchetypesSchema.safeParse(parsed);
-    if (!result.success) {
-      throw new Error(
-        `Invalid meta/archetypes.yaml:\n${result.error.issues
-          .map((i) => `  ${i.path.join('.')}: ${i.message}`)
-          .join('\n')}`,
-      );
-    }
-    return result.data.archetypes;
+    raw = await fs.readFile(filePath, 'utf8');
   } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    if (e.code === 'ENOENT') return {};
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw err;
   }
+  const parsed = YAML.parse(raw);
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(
+      `Invalid ${label}:\n${result.error.issues
+        .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+        .join('\n')}`,
+    );
+  }
+  return result.data;
+}
+
+async function loadGlobalArchetypes(ctx: Context): Promise<Record<string, ArchetypeYaml>> {
+  const p = path.join(ctx.paths.meta, 'archetypes.yaml');
+  const loaded = await loadOptionalYaml(p, GlobalArchetypesSchema, 'meta/archetypes.yaml');
+  return loaded?.archetypes ?? {};
 }
 
 async function loadConfig(ctx: Context): Promise<ConfigYaml> {
   const p = path.join(ctx.paths.meta, 'config.yaml');
-  try {
-    const raw = await fs.readFile(p, 'utf8');
-    const parsed = YAML.parse(raw);
-    const result = ConfigSchema.safeParse(parsed);
-    if (!result.success) {
-      throw new Error(
-        `Invalid meta/config.yaml:\n${result.error.issues
-          .map((i) => `  ${i.path.join('.')}: ${i.message}`)
-          .join('\n')}`,
-      );
-    }
-    return result.data;
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    if (e.code === 'ENOENT') return {};
-    throw err;
-  }
+  return (await loadOptionalYaml(p, ConfigSchema, 'meta/config.yaml')) ?? {};
 }
 
 async function loadModules(ctx: Context): Promise<Map<string, Module>> {
   const dir = path.join(ctx.paths.meta, 'modules');
   const modules = new Map<string, Module>();
+  // Directory-scoped rather than single-file: readdir + per-entry dispatch,
+  // so `loadOptionalYaml` (single-file) doesn't fit. Per-entry schema errors
+  // are thrown below with the offending filename.
   let entries: string[];
   try {
     entries = await fs.readdir(dir);

@@ -27,6 +27,15 @@ describe('resolveModuleChain', () => {
     expect(chain.map((m) => m.name)).toEqual(['vip']);
   });
 
+  test('-name subtracts prior occurrences only; a re-add after it wins', () => {
+    const chain = resolveModuleChain([
+      ['simplelogin'],
+      ['-simplelogin'],
+      ['simplelogin'],
+    ]);
+    expect(chain.map((m) => m.name)).toEqual(['simplelogin']);
+  });
+
   test('handles undefined layers gracefully', () => {
     expect(resolveModuleChain([undefined, ['vip'], undefined])).toEqual([{ name: 'vip' }]);
   });

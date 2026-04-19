@@ -12,11 +12,16 @@ export type SearchNode =
   | { kind: 'and'; children: SearchNode[] }
   | { kind: 'or'; children: SearchNode[] }
   | { kind: 'not'; child: SearchNode }
-  | { kind: 'field'; field: SearchField; value: string }
+  | { kind: 'field'; field: string; value: string }
   | { kind: 'header'; name: string; value: string }
   | { kind: 'phrase'; value: string }
   | { kind: 'raw'; value: string };
 
+/**
+ * Canonical semantic field names produced by buildSearch. parseSearch may
+ * emit arbitrary field names (including forbidden ones like `in`, `attached`)
+ * because the validator needs to see them — the node's `field` is plain string.
+ */
 export type SearchField =
   | 'from'
   | 'to'
@@ -39,7 +44,7 @@ export const or = (...children: SearchNode[]): SearchNode => ({
 
 export const not = (child: SearchNode): SearchNode => ({ kind: 'not', child });
 
-export const field = (f: SearchField, value: string): SearchNode => ({
+export const field = (f: string, value: string): SearchNode => ({
   kind: 'field',
   field: f,
   value,
@@ -54,6 +59,16 @@ export const header = (name: string, value: string): SearchNode => ({
 export const phrase = (value: string): SearchNode => ({ kind: 'phrase', value });
 
 export const raw = (value: string): SearchNode => ({ kind: 'raw', value });
+
+/** Pre-order traversal yielding every node in the tree. */
+export function* walk(node: SearchNode): Generator<SearchNode> {
+  yield node;
+  if (node.kind === 'and' || node.kind === 'or') {
+    for (const c of node.children) yield* walk(c);
+  } else if (node.kind === 'not') {
+    yield* walk(node.child);
+  }
+}
 
 /** Flatten nested same-kind groups. `and(a, and(b, c))` → `and(a, b, c)`. */
 export function flatten(node: SearchNode): SearchNode {

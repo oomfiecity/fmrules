@@ -1,6 +1,6 @@
 defaults:
   from: anthropic.com
-  use: [simplelogin]
+  use: [ simplelogin ]
 
 archetypes:
   alert:
@@ -13,13 +13,15 @@ rules:
 
   - archetype: alert
     name: Anthropic account alerts
-    subjects:
+    subject:
       - Your subscription access has been paused
       - welcome to the pro plan
 
   - name: Anthropic marketing spam
-    subjects: [Introducing, New in Claude]
     mark_spam: true
     mark_read: true
     discard: true
     stop: true
+    subject:
+      - Introducing
+      - New in Claude

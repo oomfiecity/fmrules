@@ -1,27 +1,18 @@
 /**
  * Compile a declarative YAML module into a runtime Module.
  *
- * A declarative module names a matcher field (e.g. `from`) and an IR
- * expression to replace that field's value with. Occurrences of `{value}`
- * in the IR expression are substituted with the field's concrete value.
- *
- * This covers the SimpleLogin-style use case and most forwarder bridges
- * without requiring TS. Anything more complex (fan-out, computed data,
- * action mutation) should be a .ts module.
+ * A declarative module names a matcher field (e.g. `from`) and a SearchExpr
+ * tree to replace that field's value with. `{value}` in any string position
+ * inside the tree is substituted with the matcher's concrete value at
+ * module-application time. The grammar is the same one rule `match:` trees
+ * use — see `SearchExprSchema` in `src/schema/yaml.ts`.
  */
 
 import type { Module } from '../module.ts';
 import type { DeclarativeModuleYaml } from '../schema/yaml.ts';
-import type { Matchers, PartialRule } from '../types.ts';
-import {
-  and as irAnd,
-  field as irField,
-  header as irHeader,
-  or as irOr,
-  raw as irRaw,
-  type SearchField,
-  type SearchNode,
-} from './search-ir.ts';
+import type { Matchers, MatcherValue, PartialRule, SearchExpr } from '../types.ts';
+import { compileSearchExpr } from './build-search.ts';
+import { or as irOr, type SearchNode } from './search-ir.ts';
 
 
 type MatcherKey = keyof Matchers;
@@ -39,35 +30,46 @@ function isMatcherKey(x: string): x is MatcherKey {
   return (MATCHER_KEYS as readonly string[]).includes(x);
 }
 
-function interpolate(tpl: string, value: string): string {
-  return tpl.replace(/\{value\}/g, value);
+/**
+ * Substitute `{value}` in every string position of a MatcherValue. Uses
+ * `.replaceAll` (string form) so `$`/`$&` in `value` aren't interpreted as
+ * regex back-references in the replacement.
+ */
+function interpolateMatcherValue(v: MatcherValue, value: string): MatcherValue {
+  if (typeof v === 'string') return v.replaceAll('{value}', value);
+  if (Array.isArray(v)) return v.map((s) => s.replaceAll('{value}', value));
+  return {
+    ...(v.any && { any: v.any.map((s) => s.replaceAll('{value}', value)) }),
+    ...(v.all && { all: v.all.map((s) => s.replaceAll('{value}', value)) }),
+  };
 }
 
-function buildTransformIR(node: unknown, value: string): SearchNode {
-  if (node && typeof node === 'object') {
-    const obj = node as Record<string, unknown>;
-    if ('or' in obj && Array.isArray(obj.or)) {
-      return irOr(...obj.or.map((c) => buildTransformIR(c, value)));
-    }
-    if ('and' in obj && Array.isArray(obj.and)) {
-      return irAnd(...obj.and.map((c) => buildTransformIR(c, value)));
-    }
-    for (const fld of ['from', 'to', 'subject', 'body'] as const) {
-      if (fld in obj && typeof obj[fld] === 'string') {
-        return irField(fld as SearchField, interpolate(obj[fld] as string, value));
-      }
-    }
-    if ('header' in obj && obj.header && typeof obj.header === 'object') {
-      const h = obj.header as { name?: string; value?: string; contains?: string };
-      const name = h.name ?? '';
-      const v = h.value ?? h.contains ?? '';
-      return irHeader(interpolate(name, value), interpolate(v, value));
-    }
-    if ('raw' in obj && typeof obj.raw === 'string') {
-      return irRaw(interpolate(obj.raw as string, value));
-    }
+/**
+ * Walk a SearchExpr and substitute `{value}` in every string position
+ * (leaf MatcherValues, header name + value, raw fragment). Structural
+ * nodes (`any`/`all`) recurse; values are replaced via string
+ * `.replaceAll` to avoid regex-special-char corruption.
+ */
+function interpolateSearchExpr(expr: SearchExpr, value: string): SearchExpr {
+  if ('any' in expr) return { any: expr.any.map((c) => interpolateSearchExpr(c, value)) };
+  if ('all' in expr) return { all: expr.all.map((c) => interpolateSearchExpr(c, value)) };
+  if ('from' in expr) return { from: interpolateMatcherValue(expr.from, value) };
+  if ('to' in expr) return { to: interpolateMatcherValue(expr.to, value) };
+  if ('subject' in expr) return { subject: interpolateMatcherValue(expr.subject, value) };
+  if ('body' in expr) return { body: interpolateMatcherValue(expr.body, value) };
+  if ('with' in expr) return { with: interpolateMatcherValue(expr.with, value) };
+  if ('list' in expr) return { list: interpolateMatcherValue(expr.list, value) };
+  if ('text' in expr) return { text: interpolateMatcherValue(expr.text, value) };
+  if ('domain' in expr) return { domain: interpolateMatcherValue(expr.domain, value) };
+  if ('header' in expr) {
+    return {
+      header: {
+        name: expr.header.name.replaceAll('{value}', value),
+        value: expr.header.value.replaceAll('{value}', value),
+      },
+    };
   }
-  throw new Error(`Unrecognized declarative transform node: ${JSON.stringify(node)}`);
+  return { raw: expr.raw.replaceAll('{value}', value) };
 }
 
 /**
@@ -79,7 +81,7 @@ function buildTransformIR(node: unknown, value: string): SearchNode {
 function applyToRule(
   rule: PartialRule,
   targetKey: MatcherKey,
-  transformTree: unknown,
+  transformTree: SearchExpr,
 ): PartialRule {
   const m = rule.matchers;
   const current = m[targetKey];
@@ -89,13 +91,15 @@ function applyToRule(
   if (typeof current === 'string') values = [current];
   else if (Array.isArray(current)) values = current.filter((v): v is string => typeof v === 'string');
   else if (current && typeof current === 'object' && !('name' in current)) {
+    // TODO: `{any, all}` flatten-to-OR is a latent bug; `all` members
+    // should AND-join, not OR-join with `any`. No current rule triggers it.
     const v = current as { any?: string[]; all?: string[] };
     values = [...(v.any ?? []), ...(v.all ?? [])];
-  } else return rule; // header objects — out of scope for declarative modules
+  } else return rule; // header objects — declarative modules don't target `header:`
 
   if (values.length === 0) return rule;
 
-  const branches = values.map((v) => buildTransformIR(transformTree, v));
+  const branches = values.map((v) => compileSearchExpr(interpolateSearchExpr(transformTree, v), rule));
   const bundled: SearchNode = branches.length === 1 ? branches[0]! : irOr(...branches);
 
   const nextMatchers: Matchers = { ...m };
@@ -127,7 +131,7 @@ export function buildDeclarativeModule(decl: DeclarativeModuleYaml): Module {
         let next = r;
         for (const t of validTargets) {
           const tree = decl.transform[t];
-          if (tree !== undefined) next = applyToRule(next, t, tree);
+          if (tree !== undefined) next = applyToRule(next, t, tree as SearchExpr);
         }
         return next;
       });
