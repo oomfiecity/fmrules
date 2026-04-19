@@ -1,0 +1,75 @@
+name: fmrules compile
+description: Compile YAML mail rules into a Fastmail mailrules.json.
+author: cnc-machine
+branding:
+  icon: mail
+  color: blue
+
+inputs:
+  version:
+    description: 'fmrules release tag to use (e.g. v1, v1.2.3, or "latest"). Defaults to the action ref; falls back to the latest release.'
+    required: false
+    default: ''
+  rules-dir:
+    description: 'Working directory that contains the rules/ and meta/ subdirs.'
+    required: false
+    default: '.'
+  out:
+    description: 'Output path for mailrules.json, relative to rules-dir.'
+    required: false
+    default: 'mailrules.json'
+  extra-args:
+    description: 'Additional flags passed verbatim to `fmrules compile`.'
+    required: false
+    default: ''
+  token:
+    description: 'GitHub token used to download the release binary. Required when fastmail-rules is private; for public repos the default workflow token is sufficient.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: 'Resolved fmrules version that executed.'
+    value: ${{ steps.install.outputs.version }}
+  changed:
+    description: 'true if mailrules.json or meta/lockfile.json differs from HEAD after compile.'
+    value: ${{ steps.diff.outputs.changed }}
+  output-path:
+    description: 'Absolute path to the generated mailrules.json.'
+    value: ${{ steps.compile.outputs.output-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        FMRULES_VERSION_INPUT: ${{ inputs.version }}
+        FMRULES_ACTION_REF: ${{ github.action_ref }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: ${{ github.action_path }}/install.sh
+
+    - id: compile
+      shell: bash
+      working-directory: ${{ inputs.rules-dir }}
+      env:
+        EXTRA_ARGS: ${{ inputs.extra-args }}
+        OUT: ${{ inputs.out }}
+      run: |
+        set -euo pipefail
+        # shellcheck disable=SC2086
+        fmrules compile --out "$OUT" $EXTRA_ARGS
+        echo "output-path=$(pwd)/$OUT" >> "$GITHUB_OUTPUT"
+
+    - id: diff
+      shell: bash
+      working-directory: ${{ inputs.rules-dir }}
+      env:
+        OUT: ${{ inputs.out }}
+      run: |
+        set -euo pipefail
+        if [ -n "$(git status --porcelain -- "$OUT" meta/lockfile.json 2>/dev/null)" ]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        fi

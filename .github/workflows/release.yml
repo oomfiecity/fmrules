@@ -134,3 +134,27 @@ jobs:
           files: |
             dist/fmrules-*
             dist/SHA256SUMS.txt
+
+  move-major-tag:
+    needs: [version, release]
+    if: needs.version.outputs.is_tag == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Move floating major tag
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version '$VERSION' is not vX.Y.Z; skipping major-tag update."
+            exit 0
+          fi
+          MAJOR="v${BASH_REMATCH[1]}"
+          echo "Moving '$MAJOR' to point at $VERSION ($GITHUB_SHA)"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -f "$MAJOR" "$GITHUB_SHA"
+          git push origin "$MAJOR" --force
