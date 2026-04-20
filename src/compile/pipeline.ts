@@ -28,14 +28,18 @@ export interface PipelineOptions {
   strict?: boolean;
 }
 
-export async function runPipeline(ctx: Context, opts: PipelineOptions): Promise<void> {
+/**
+ * Load + normalize + apply modules + buildSearch. Stops short of
+ * render/validate/sort/emit so callers (`fmrules match`) that only need
+ * the SearchNode IR don't pay for serialization. Returns an empty
+ * `rules` array when no rule files are present — callers decide how to
+ * report that.
+ */
+export async function loadAndBuildRules(
+  ctx: Context,
+): Promise<{ rules: PartialRule[]; meta: LoadedMeta; files: LoadedFile[] }> {
   const files = await loadRuleFiles(ctx);
   const meta = await loadMeta(ctx);
-
-  if (files.length === 0) {
-    ctx.log.warn('No rule files found.');
-    return;
-  }
 
   let rules: PartialRule[] = [];
   for (const file of files) {
@@ -54,11 +58,23 @@ export async function runPipeline(ctx: Context, opts: PipelineOptions): Promise<
   }
 
   rules = await applyModules(rules, meta, ctx);
+  for (const rule of rules) {
+    rule.search = buildSearch(rule);
+  }
+  return { rules, meta, files };
+}
+
+export async function runPipeline(ctx: Context, opts: PipelineOptions): Promise<void> {
+  const { rules, meta, files } = await loadAndBuildRules(ctx);
+
+  if (files.length === 0) {
+    ctx.log.warn('No rule files found.');
+    return;
+  }
 
   const renderedByRule = new Map<PartialRule, string>();
   for (const rule of rules) {
-    rule.search = buildSearch(rule);
-    const rendered = render(rule.search);
+    const rendered = render(rule.search!);
     renderedByRule.set(rule, rendered);
     validateRule(
       rule,

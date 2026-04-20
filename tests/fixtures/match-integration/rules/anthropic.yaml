@@ -1,0 +1,24 @@
+rules:
+  - name: Anthropic receipts
+    from: receipts@anthropic.com
+    subject: receipt
+    file_in: Receipts
+
+  - name: Anthropic any
+    from: anthropic.com
+    file_in: Anthropic
+
+  - name: GitHub PRs
+    from: noreply@github.com
+    subject: pull request
+    file_in: GitHub
+
+  - name: Stateful — only matches when read
+    from: anthropic.com
+    search_raw: 'is:read'
+    file_in: Receipts
+
+  - name: Never matches
+    from: gmail.com
+    subject: nothing-real
+    file_in: Receipts

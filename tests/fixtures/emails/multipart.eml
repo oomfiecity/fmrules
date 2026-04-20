@@ -1,0 +1,18 @@
+From: GitHub <noreply@github.com>
+To: user@example.com
+Subject: [octocat/repo] Pull request opened
+List-Id: <octocat/repo.github.com>
+Content-Type: multipart/alternative; boundary="boundary42"
+
+--boundary42
+Content-Type: text/plain; charset=utf-8
+
+A new pull request was opened in octocat/repo.
+
+View it at https://github.com/octocat/repo/pull/1
+
+--boundary42
+Content-Type: text/html; charset=utf-8
+
+<html><body>A new pull request was opened.</body></html>
+--boundary42--

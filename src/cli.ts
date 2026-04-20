@@ -4,6 +4,7 @@ import { hideBin } from 'yargs/helpers';
 import { command as compile } from './commands/compile.ts';
 import { command as check } from './commands/check.ts';
 import { command as migrate } from './commands/migrate.ts';
+import { command as match } from './commands/match.ts';
 
 await yargs(hideBin(process.argv))
   .scriptName('fmrules')
@@ -19,7 +20,8 @@ await yargs(hideBin(process.argv))
   .command(compile)
   .command(check)
   .command(migrate)
-  .demandCommand(1, 'Specify a subcommand (compile | check | migrate)')
+  .command(match)
+  .demandCommand(1, 'Specify a subcommand (compile | check | migrate | match)')
   .strict()
   .help()
   .alias('help', 'h')

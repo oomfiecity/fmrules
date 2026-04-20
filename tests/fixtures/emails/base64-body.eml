@@ -1,0 +1,7 @@
+From: sender@example.com
+To: user@example.com
+Subject: Base64 body
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+SGVsbG8sIHdvcmxkIQpUaGlzIGJvZHkgaXMgYmFzZTY0LWVuY29kZWQuCg==

@@ -1,0 +1,7 @@
+From: sender@example.com
+To: user@example.com
+Subject: =?utf-8?B?VGhpcyBpcyDwn5GLIGEgZW5jb2RlZCBzdWJqZWN0?=
+X-Q-Subject: =?utf-8?Q?Q-encoded_caf=C3=A9?=
+Content-Type: text/plain
+
+Body.
