@@ -48,7 +48,7 @@ outputs:
     description: 'Resolved fmrules version that executed.'
     value: ${{ steps.install.outputs.version }}
   changed:
-    description: 'true if mailrules.json or meta/lockfile.json differs from HEAD after compile.'
+    description: 'true if the compiled mailrules.json differs from the most recent compile-* release (or it is the first compile in this repo).'
     value: ${{ steps.diff.outputs.changed }}
   output-path:
     description: 'Absolute path to the generated mailrules.json.'
@@ -71,6 +71,42 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
       run: ${{ github.action_path }}/install.sh
 
+    # Restore meta/lockfile.json + a snapshot of the previous mailrules.json
+    # from the most recent compile-* release on this consumer repo. The
+    # restored lockfile lets `fmrules compile` preserve `created` timestamps;
+    # the snapshotted prev mailrules.json is the baseline for the content
+    # diff in the next step. Skipped on PRs (forks can't authenticate).
+    - id: restore-prev
+      if: github.event_name != 'pull_request'
+      shell: bash
+      working-directory: ${{ inputs.rules-dir }}
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        OUT: ${{ inputs.out }}
+      run: |
+        set -euo pipefail
+        LATEST=$(gh release list --limit 50 --json tagName --jq \
+          '[.[] | select(.tagName | startswith("compile-"))] | first | .tagName // empty')
+        if [ -z "$LATEST" ]; then
+          echo "No prior compile-* release; first compile in this repo."
+          echo "first-run=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "prev-tag=$LATEST" >> "$GITHUB_OUTPUT"
+
+        mkdir -p meta "${RUNNER_TEMP}/fmrules-prev"
+
+        if gh release download "$LATEST" --pattern lockfile.json --dir meta --clobber 2>/dev/null; then
+          echo "Restored meta/lockfile.json from $LATEST"
+        else
+          echo "Release $LATEST has no lockfile.json — lockfile starts fresh."
+        fi
+
+        OUT_BASENAME=$(basename "$OUT")
+        if gh release download "$LATEST" --pattern "$OUT_BASENAME" --dir "${RUNNER_TEMP}/fmrules-prev" --clobber 2>/dev/null; then
+          echo "Snapshotted prev $OUT_BASENAME from $LATEST"
+        fi
+
     - id: compile
       shell: bash
       working-directory: ${{ inputs.rules-dir }}
@@ -83,17 +119,32 @@ runs:
         fmrules compile --out "$OUT" $EXTRA_ARGS
         echo "output-path=$(pwd)/$OUT" >> "$GITHUB_OUTPUT"
 
+    # Content diff against the prev release's mailrules.json snapshot.
+    # `git status` would always report untracked here (the artifacts aren't
+    # committed in main under the release-only workflow), so we compare
+    # bytes directly. First run on a fresh repo (no prior compile-*
+    # release) is treated as changed so the first artifact gets published.
     - id: diff
       shell: bash
       working-directory: ${{ inputs.rules-dir }}
       env:
         OUT: ${{ inputs.out }}
+        FIRST_RUN: ${{ steps.restore-prev.outputs.first-run }}
       run: |
         set -euo pipefail
-        if [ -n "$(git status --porcelain -- "$OUT" meta/lockfile.json 2>/dev/null)" ]; then
+        OUT_BASENAME=$(basename "$OUT")
+        PREV="${RUNNER_TEMP}/fmrules-prev/${OUT_BASENAME}"
+        if [ "$FIRST_RUN" = "true" ] || [ ! -f "$PREV" ]; then
+          echo "No prior $OUT_BASENAME to compare against; treating as changed."
           echo "changed=true" >> "$GITHUB_OUTPUT"
-        else
+          exit 0
+        fi
+        if cmp -s "$OUT" "$PREV"; then
+          echo "$OUT_BASENAME unchanged vs previous release."
           echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "$OUT_BASENAME differs from previous release."
+          echo "changed=true" >> "$GITHUB_OUTPUT"
         fi
 
     # Publish mailrules.json + meta/lockfile.json as a GitHub Release on the
