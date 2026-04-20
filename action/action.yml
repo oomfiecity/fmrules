@@ -23,9 +23,25 @@ inputs:
     required: false
     default: ''
   token:
-    description: 'GitHub token used to download the release binary. Required when fastmail-rules is private; for public repos the default workflow token is sufficient.'
+    description: 'GitHub token used to download the release binary. Required when fmrules is private; for public repos the default workflow token is sufficient.'
     required: false
     default: ${{ github.token }}
+  release:
+    description: 'When "true" (default), publish the compiled mailrules.json + meta/lockfile.json as a GitHub Release on the consumer repo whenever compile.changed is true. Set to "false" to disable. Never fires on pull_request events. Requires contents: write.'
+    required: false
+    default: 'true'
+  release-tag:
+    description: 'Tag for the published release. Default: compile-YYYY-MM-DD-<shortsha>. Must be unique — re-runs with the same tag skip (idempotent).'
+    required: false
+    default: ''
+  release-name:
+    description: 'Release title. Defaults to the tag.'
+    required: false
+    default: ''
+  release-notes:
+    description: 'Release body (markdown). Defaults to a one-line summary naming the source commit and fmrules version.'
+    required: false
+    default: ''
 
 outputs:
   version:
@@ -37,6 +53,12 @@ outputs:
   output-path:
     description: 'Absolute path to the generated mailrules.json.'
     value: ${{ steps.compile.outputs.output-path }}
+  release-tag:
+    description: 'Tag of the published (or pre-existing, on re-run) GitHub Release. Empty when release was skipped.'
+    value: ${{ steps.release.outputs.tag }}
+  release-url:
+    description: 'URL of the published (or pre-existing) GitHub Release. Empty when release was skipped.'
+    value: ${{ steps.release.outputs.url }}
 
 runs:
   using: composite
@@ -73,3 +95,54 @@ runs:
         else
           echo "changed=false" >> "$GITHUB_OUTPUT"
         fi
+
+    # Publish mailrules.json + meta/lockfile.json as a GitHub Release on the
+    # consumer repo. Opt-out via `release: 'false'`. Skipped on PRs (forks
+    # can't write; and you don't want pre-merge compiles hitting releases).
+    - id: release
+      if: inputs.release == 'true' && steps.diff.outputs.changed == 'true' && github.event_name != 'pull_request'
+      shell: bash
+      working-directory: ${{ inputs.rules-dir }}
+      env:
+        RELEASE_TAG_INPUT: ${{ inputs.release-tag }}
+        RELEASE_NAME_INPUT: ${{ inputs.release-name }}
+        RELEASE_NOTES_INPUT: ${{ inputs.release-notes }}
+        OUT: ${{ inputs.out }}
+        FMRULES_VERSION: ${{ steps.install.outputs.version }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        SHORT_SHA="${GITHUB_SHA:0:7}"
+        DATE=$(date -u +%Y-%m-%d)
+        TAG="${RELEASE_TAG_INPUT:-compile-${DATE}-${SHORT_SHA}}"
+        NAME="${RELEASE_NAME_INPUT:-$TAG}"
+
+        if [ -n "$RELEASE_NOTES_INPUT" ]; then
+          NOTES="$RELEASE_NOTES_INPUT"
+        else
+          NOTES="Compiled \`${OUT}\` from commit \`${GITHUB_SHA}\` with fmrules ${FMRULES_VERSION}."
+        fi
+
+        # Idempotency: a re-run on the same commit reuses the existing release.
+        if URL=$(gh release view "$TAG" --json url --jq .url 2>/dev/null); then
+          echo "Release $TAG already exists: $URL"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        ASSETS=("$OUT")
+        if [ -f meta/lockfile.json ]; then
+          ASSETS+=(meta/lockfile.json)
+        fi
+
+        URL=$(gh release create "$TAG" \
+          --target "$GITHUB_SHA" \
+          --title "$NAME" \
+          --notes "$NOTES" \
+          "${ASSETS[@]}")
+
+        echo "Published $URL"
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "url=$URL" >> "$GITHUB_OUTPUT"

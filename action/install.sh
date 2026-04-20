@@ -3,7 +3,12 @@ set -euo pipefail
 
 # Resolve version ---------------------------------------------------------
 #   1. `inputs.version` (unless empty or "latest")
-#   2. `github.action_ref` if it looks like a tag
+#   2. `github.action_ref` if it pins a release tag
+#      - vX.Y.Z → that exact release
+#      - vX      → latest release whose tag starts with `vX.` (the floating
+#                  major tag advanced by release.yml's `move-major-tag` job
+#                  is a git tag, not a GH release — query for the matching
+#                  release instead of downloading the tag directly).
 #   3. the repo's latest release via `gh api`
 resolve_version() {
   local input="${FMRULES_VERSION_INPUT:-}"
@@ -14,12 +19,21 @@ resolve_version() {
     return
   fi
 
-  if [ "$input" != "latest" ] && [ -n "$ref" ] && [[ "$ref" =~ ^v ]]; then
-    echo "$ref"
-    return
+  if [ "$input" != "latest" ] && [ -n "$ref" ]; then
+    if [[ "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+      echo "$ref"
+      return
+    fi
+    if [[ "$ref" =~ ^v[0-9]+$ ]]; then
+      # Releases API returns newest-first; pick the first whose tag starts
+      # with `vX.` (matches vX.Y.Z but not vX0.*, vX-foo, etc.).
+      gh api "repos/oomfiecity/fmrules/releases?per_page=100" --jq \
+        "[.[] | select(.tag_name | startswith(\"$ref.\"))] | first | .tag_name // empty"
+      return
+    fi
   fi
 
-  gh api repos/cnc-machine/fastmail-rules/releases/latest --jq .tag_name
+  gh api repos/oomfiecity/fmrules/releases/latest --jq .tag_name
 }
 
 VERSION="$(resolve_version)"
@@ -53,9 +67,9 @@ DOWNLOAD_DIR="${RUNNER_TEMP:-/tmp}/fmrules-download"
 INSTALL_DIR="${RUNNER_TEMP:-/tmp}/fmrules/bin"
 mkdir -p "$DOWNLOAD_DIR" "$INSTALL_DIR"
 
-echo "Downloading fmrules $VERSION ($ASSET) from cnc-machine/fastmail-rules..."
+echo "Downloading fmrules $VERSION ($ASSET) from oomfiecity/fmrules..."
 gh release download "$VERSION" \
-  --repo cnc-machine/fastmail-rules \
+  --repo oomfiecity/fmrules \
   --pattern "$ASSET" \
   --pattern "SHA256SUMS.txt" \
   --dir "$DOWNLOAD_DIR" \

@@ -1,11 +1,14 @@
 name: Action smoke test
 
+# Smoke keys off `Release` completing, not raw pushes. Why: `install.sh`
+# resolves `version: latest` via `gh api .../releases/latest`. On the first
+# push to a fresh repo (or any push that happens before Release publishes
+# binaries on a tag push) there is no release to fetch and the smoke fails
+# with HTTP 404. Running after `Release` completes removes the race.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'action/**'
-      - '.github/workflows/action-smoke.yml'
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
   pull_request:
     paths:
       - 'action/**'
@@ -17,6 +20,8 @@ permissions:
 
 jobs:
   smoke:
+    # Skip when `Release` didn't succeed — no new binaries to smoke.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -24,12 +29,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - id: fmrules
         uses: ./action
         with:
           rules-dir: tests/fixtures/fan-out
           version: latest
+          # Smoke compiles a fixture every CI run; we don't want those
+          # disposable compiles spawning GitHub Releases on this repo.
+          release: 'false'
 
       - name: Assert outputs
         shell: bash
