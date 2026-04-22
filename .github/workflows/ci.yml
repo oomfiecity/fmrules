@@ -13,3 +13,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun test
+      - name: Smoke compile (host target)
+        run: bun scripts/build.ts
+      - name: Verify binary runs
+        run: ./dist/fmrules --help

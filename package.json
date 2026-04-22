@@ -9,6 +9,9 @@
   "scripts": {
     "compile": "bun run src/cli.ts compile",
     "check": "bun run src/cli.ts check",
+    "sync": "bun run src/cli.ts sync",
+    "login": "bun run src/cli.ts login",
+    "build": "bun scripts/build.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "ci": "bun run typecheck && bun test",
@@ -16,6 +19,7 @@
   },
   "dependencies": {
     "picocolors": "^1.1.1",
+    "playwright-core": "^1.59.1",
     "yaml": "^2.7.0",
     "yargs": "^17.7.2",
     "zod": "^3.24.1"

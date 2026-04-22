@@ -6,6 +6,9 @@ import { command as check } from './commands/check.ts';
 import { command as migrate } from './commands/migrate.ts';
 import { command as match } from './commands/match.ts';
 import { command as revert } from './commands/revert.ts';
+import { command as sync } from './commands/sync.ts';
+import { command as login } from './commands/login.ts';
+import { command as installBrowsers } from './commands/install-browsers.ts';
 
 await yargs(hideBin(process.argv))
   .scriptName('fmrules')
@@ -23,7 +26,10 @@ await yargs(hideBin(process.argv))
   .command(migrate)
   .command(match)
   .command(revert)
-  .demandCommand(1, 'Specify a subcommand (compile | check | migrate | match | revert)')
+  .command(sync)
+  .command(login)
+  .command(installBrowsers)
+  .demandCommand(1, 'Specify a subcommand (compile | check | migrate | match | revert | sync | login | install-browsers)')
   .strict()
   .help()
   .alias('help', 'h')

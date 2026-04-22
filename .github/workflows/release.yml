@@ -67,12 +67,7 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: Build native (${{ matrix.native_target }})
-        run: |
-          mkdir -p dist
-          bun build src/cli.ts \
-            --compile \
-            --target=${{ matrix.native_target }} \
-            --outfile=dist/fmrules-${{ matrix.native_target }}
+        run: bun scripts/build.ts ${{ matrix.native_target }} dist/fmrules-${{ matrix.native_target }}
 
       - name: Smoke test native binary
         run: |
@@ -85,10 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           for target in ${{ matrix.cross_targets }}; do
-            bun build src/cli.ts \
-              --compile \
-              --target=$target \
-              --outfile=dist/fmrules-$target
+            bun scripts/build.ts "$target" "dist/fmrules-$target"
           done
 
       - name: Generate per-runner checksums
