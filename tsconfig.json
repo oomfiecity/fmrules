@@ -16,5 +16,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*", "tests/**/*", "meta/modules/**/*.ts"]
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*", "meta/modules/**/*.ts"]
 }

@@ -150,3 +150,53 @@ jobs:
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git tag -f "$MAJOR" "$GITHUB_SHA"
           git push origin "$MAJOR" --force
+
+  # Auto-bump oomfiecity/homebrew-tap's Formula/fmrules.rb on every real
+  # release tag (vX.Y.Z). Skipped on prerelease push-built tags
+  # (v4.0.2-main.…) since `is_tag` is only true on tag pushes.
+  #
+  # Requires the HOMEBREW_TAP_TOKEN secret (fine-grained PAT, contents:write
+  # on oomfiecity/homebrew-tap). Without the secret the second checkout
+  # fails 401 — the rest of the release pipeline is unaffected.
+  bump-homebrew:
+    needs: [version, build, release]
+    if: needs.version.outputs.is_tag == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: dist
+      - name: Combine checksums
+        run: |
+          set -euo pipefail
+          cat dist/SHA256SUMS-*.txt > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - uses: actions/checkout@v4
+        with:
+          repository: oomfiecity/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - name: Render formula
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: bun scripts/render-homebrew-formula.ts SHA256SUMS.txt "$VERSION" > tap/Formula/fmrules.rb
+      - name: Commit + push
+        working-directory: tap
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Formula already at $VERSION; nothing to do."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -am "Bump fmrules to $VERSION"
+          git push origin main

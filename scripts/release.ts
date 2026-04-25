@@ -74,46 +74,75 @@ async function runInherit(cmd: string[]): Promise<number> {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 // ──────────────────────────────────────────────────────────────────────
-// Arg parsing
+// Arg parsing — yargs
+
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 
 interface Args {
   version?: string;
   bump?: 'patch' | 'minor' | 'major';
   dryRun: boolean;
   skipVerify: boolean;
-  help: boolean;
 }
 
-function parseArgs(argv: string[]): Args {
-  const out: Args = { dryRun: false, skipVerify: false, help: false };
-  for (const a of argv) {
-    if (a === '--help' || a === '-h') out.help = true;
-    else if (a === '--dry-run') out.dryRun = true;
-    else if (a === '--skip-verify') out.skipVerify = true;
-    else if (a === '--patch') out.bump = 'patch';
-    else if (a === '--minor') out.bump = 'minor';
-    else if (a === '--major') out.bump = 'major';
-    else if (!a.startsWith('-')) out.version = a;
-    else fail(`unknown flag: ${a}`, 'run with --help');
-  }
-  return out;
-}
-
-const USAGE = `Usage:
-  bun release <X.Y.Z>           Cut a specific version.
-  bun release --patch           Bump package.json patch; derive version.
-  bun release --minor           Bump package.json minor.
-  bun release --major           Bump package.json major.
-
-Flags:
-  --dry-run       Print the plan without touching state. Preflight still runs.
-  --skip-verify   Push + tag, but skip the post-push CI watch + asset verify.
-  --help, -h      This text.
-
-The script refuses to run if the working tree is dirty, main is out of
+const EPILOGUE = `The script refuses to run if the working tree is dirty, main is out of
 sync with origin, local ci (typecheck + tests) fails, the requested
-tag already exists, or the version arg is malformed. No destructive git
-is ever invoked.`;
+tag already exists, or the version arg is malformed. No destructive
+git is ever invoked.`;
+
+async function parseArgs(rawArgv: string[]): Promise<Args> {
+  const parsed = await yargs(rawArgv)
+    .scriptName('release')
+    .usage('$0 <version> [flags]\n  $0 (--patch|--minor|--major) [flags]')
+    .command(
+      '$0 [version]',
+      'Cut an oomfiecity/fmrules release.',
+      (y) =>
+        y
+          .positional('version', {
+            type: 'string',
+            describe: 'Target version (X.Y.Z or vX.Y.Z). Mutually exclusive with --patch/--minor/--major.',
+          })
+          // Boolean flags are intentionally undefined-by-default so that
+          // yargs `.conflicts()` only fires when the user explicitly
+          // passes a flag. Treat absence as `false` downstream.
+          .option('patch', { type: 'boolean', describe: 'Bump package.json patch and derive version' })
+          .option('minor', { type: 'boolean', describe: 'Bump package.json minor and derive version' })
+          .option('major', { type: 'boolean', describe: 'Bump package.json major and derive version' })
+          .option('dry-run', { type: 'boolean', describe: 'Print the plan without touching state. Preflight still runs.' })
+          .option('skip-verify', { type: 'boolean', describe: 'Push + tag, but skip the post-push CI watch + asset verify.' })
+          .conflicts('patch', ['minor', 'major', 'version'])
+          .conflicts('minor', ['major', 'version'])
+          .conflicts('major', ['version'])
+          .check((a) => {
+            if (!a.version && !a.patch && !a.minor && !a.major) {
+              throw new Error('one of <version> | --patch | --minor | --major is required');
+            }
+            return true;
+          }),
+    )
+    .strict()
+    .help()
+    .alias('help', 'h')
+    // Disable yargs's built-in --version so it doesn't shadow our `version`
+    // positional. The script doesn't have a meaningful "release.ts version"
+    // to report — it operates on the package.json version of the repo.
+    .version(false)
+    .epilogue(EPILOGUE)
+    .parseAsync();
+  const bump =
+    parsed.patch ? 'patch' :
+    parsed.minor ? 'minor' :
+    parsed.major ? 'major' :
+    undefined;
+  return {
+    version: parsed.version as string | undefined,
+    bump,
+    dryRun: parsed['dry-run'] === true,
+    skipVerify: parsed['skip-verify'] === true,
+  };
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Version utilities
@@ -342,11 +371,7 @@ async function verifySmokeAfter(): Promise<void> {
 // ──────────────────────────────────────────────────────────────────────
 // Driver (top-level await; Bun supports ESM modules directly)
 
-const args = parseArgs(Bun.argv.slice(2));
-if (args.help) {
-  console.log(USAGE);
-  process.exit(0);
-}
+const args = await parseArgs(hideBin(Bun.argv));
 
 // Resolve target version.
 let version: string;
@@ -366,7 +391,7 @@ if (args.version) {
   }
   version = formatVersion(next);
 } else {
-  console.error(USAGE);
+  // parseArgs's .check() rejects this, but TS doesn't know that.
   fail('no version specified');
 }
 const tag = `v${version}`;
