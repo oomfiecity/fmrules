@@ -35,7 +35,7 @@ jobs:
       - id: fmrules
         uses: ./action
         with:
-          rules-dir: tests/fixtures/fan-out
+          rules-dir: tests/fixtures/valid/13-1-minimal-rule
           version: latest
           # Smoke compiles a fixture every CI run; we don't want those
           # disposable compiles spawning GitHub Releases on this repo.
