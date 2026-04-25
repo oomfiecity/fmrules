@@ -1,9 +1,35 @@
 #!/usr/bin/env bun
 import { resolve, dirname } from "node:path";
 import { readFileSync, mkdirSync } from "node:fs";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
 
-const target = Bun.argv[2] ?? "";
-const outfile = Bun.argv[3] ?? "dist/fmrules";
+const argv = await yargs(hideBin(Bun.argv))
+  .scriptName("build")
+  .usage("$0 [target] [outfile]")
+  .command(
+    "$0 [target] [outfile]",
+    "Compile dist/fmrules (or a cross-target binary) via Bun.build",
+    (y) =>
+      y
+        .positional("target", {
+          type: "string",
+          default: "",
+          describe: "Bun cross-compile target (e.g. bun-linux-x64); omit for the host target",
+        })
+        .positional("outfile", {
+          type: "string",
+          default: "dist/fmrules",
+          describe: "Output binary path",
+        }),
+  )
+  .strict()
+  .help()
+  .alias("help", "h")
+  .parseAsync();
+
+const target = argv.target as string;
+const outfile = argv.outfile as string;
 mkdirSync(dirname(resolve(outfile)), { recursive: true });
 
 // Stamp the package.json `version` into the bundle so `fmrules --version`
