@@ -1,59 +1,90 @@
 /**
  * SPEC(10).md §8.9 — a field may not appear twice as direct children of
- * the same `all:` combinator. `all: [from: X, from: Y]` can never match
- * (one message has one From header), so the compiler flags this as a
- * bug rather than accepting a dead rule.
+ * the same `all:` combinator WHEN both leaves use a single-value match
+ * type. `all: [from: { address: A }, from: { address: B }]` can never
+ * match (one From header can't equal two distinct addresses). But
+ * `all: [subject: { contains: A }, subject: { contains: B }]` is fine —
+ * one subject can contain both substrings simultaneously.
  *
  * Applied AFTER extends resolution (§9.2), so literal + extends-sourced
  * conflicts are caught uniformly. Does not apply inside `any:` (disjunction
  * of two senders is meaningful), nor at different nesting depths.
  *
- * The "field" for collision purposes is the leaf's sort key — i.e. two
- * `from:` leaves always collide, two `header:` leaves collide only if
- * their header names match (case-insensitively per RFC 5322).
+ * Single-value match types (collision applies):
+ *   address fields with `address` / `domain` / `domain_or_subdomain`,
+ *   phrase fields with `equals`,
+ *   `header: { exists / equals }` keyed by header name,
+ *   `list_id`, `priority`, every boolean predicate (has_attachment,
+ *   from_in_contacts/vips, to_in_contacts/vips, conv_*, msg_*).
+ *
+ * Multi-value / containment match types (no collision):
+ *   `contains` / `prefix` / `suffix` (subject, body, address fields,
+ *   header values — multiple substrings can co-exist on one header value),
+ *   `larger_than` / `smaller_than` (combine to form ranges),
+ *   `filetype` / `mimetype` (a message can have multiple attachments of
+ *   different types — multiple leaves are conjuncts not collisions),
+ *   `from_in_group` / `to_in_group` (a contact can be in multiple
+ *   groups), `raw`, `date` (multiple date leaves are unusual but
+ *   satisfiable when each carries a different bound).
  */
 
 import type { Condition, Rule } from '../types.ts';
 import type { ErrorCollector } from './errors.ts';
 
-/** Derive a stable collision key for a leaf — same key = same "field". */
+/** Derive a stable collision key for a leaf — same key = same "field"
+ *  in single-value space. Returns null for match types that allow
+ *  multiple co-satisfiable leaves under one `all:`. */
 function collisionKeyOf(node: Condition): string | null {
   switch (node.kind) {
     case 'phrase':
-      return `phrase:${node.field}`;
+      // contains / prefix / suffix can co-satisfy on one header value;
+      // only `equals` is mutually exclusive across distinct values.
+      return node.match === 'equals' ? `phrase:${node.field}:equals` : null;
     case 'address':
-      return `address:${node.field}`;
+      // contains / prefix can co-satisfy. address / domain / domain_or_subdomain
+      // each pin the From header to a single value space.
+      return node.match === 'contains' || node.match === 'prefix'
+        ? null
+        : `address:${node.field}:${node.match}`;
     case 'list_id':
       return 'list_id';
     case 'size':
-      return `size:${node.op}`;
+      // larger_than X + larger_than Y is satisfiable (take max bound);
+      // larger_than + smaller_than forms a range. No collision.
+      return null;
     case 'priority':
     case 'has_attachment':
     case 'has_list_id':
     case 'from_in_contacts':
     case 'from_in_vips':
-    case 'from_in_group':
     case 'to_in_contacts':
     case 'to_in_vips':
-    case 'to_in_group':
     case 'conv_followed':
     case 'conv_muted':
     case 'msg_pinned':
     case 'msg_replied':
+      return `pred:${node.kind}`;
+    case 'from_in_group':
+    case 'to_in_group':
+      // A contact can belong to multiple groups; multiple leaves are
+      // a meaningful conjunction.
+      return null;
     case 'filetype':
     case 'mimetype':
-      return `pred:${node.kind}`;
+      // A message with multiple attachments can satisfy multiple type
+      // predicates at once.
+      return null;
     case 'header_exists':
     case 'header_equals':
+      return `${node.kind}:${node.name.toLowerCase()}`;
     case 'header_contains':
     case 'header_prefix':
     case 'header_suffix':
-      return `header:${node.name.toLowerCase()}`;
+      return null;
     case 'date':
-      return 'date';
+      // Two date leaves with different bounds form a range; not a collision.
+      return null;
     case 'raw':
-      // Two distinct `raw:` leaves are treated as distinct fields — there's
-      // no way to know whether two raw strings are semantically alike.
       return null;
     case 'all':
     case 'any':

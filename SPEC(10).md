@@ -973,9 +973,10 @@ rejection with no compile-time warning.
 ### 8.9 Field collisions
 
 A field may not appear twice as a direct child of the same `all:`
-combinator. `all: [from: X, from: Y]` is always false — a message has one
-From header, which cannot equal two distinct values — so the compiler
-flags it as a bug rather than accepting a dead rule.
+combinator **when both leaves use a single-value match type**.
+`all: [from: { address: A }, from: { address: B }]` is always false — a
+message has one From header, which cannot equal two distinct addresses,
+so the compiler flags it as a bug rather than accepting a dead rule.
 
 This rule applies uniformly to:
 
@@ -985,7 +986,37 @@ This rule applies uniformly to:
 - Multiple snippets in one `extends:` list whose conditions flatten into
   the same `all:`
 
-Field collision is **not** an error inside `any:` — `any: [from: X,
+**Single-value match types** (collision applies):
+
+- Address-field matches `address`, `domain`, `domain_or_subdomain`
+- Phrase-field match `equals`
+- `header: { exists: true }` and `header: { equals: ... }`, keyed by
+  header name (case-insensitive)
+- `list_id` (only `equals` is supported)
+- `priority` (only `high` is supported)
+- Boolean predicates `has_attachment`, `has_list_id`,
+  `from_in_contacts`, `from_in_vips`, `to_in_contacts`, `to_in_vips`,
+  `conv_followed`, `conv_muted`, `msg_pinned`, `msg_replied`
+
+**Containment / multi-value match types** (no collision; multiple
+leaves are a meaningful conjunction):
+
+- `contains`, `prefix`, `suffix` on any field — a single header value
+  can satisfy multiple substring matches at once
+- `larger_than`, `smaller_than` — combine to form size ranges
+- `filetype`, `mimetype` — a message with multiple attachments can
+  satisfy multiple type predicates simultaneously
+- `from_in_group`, `to_in_group` — a contact can belong to multiple
+  groups
+- `date` — multiple bounds combine into a range (the spec treats
+  `date: { after: X, before: Y }` and `all: [date: after X, date: before
+  Y]` as equivalent)
+- `raw` — opaque to the compiler
+
+So `all: [subject: { contains: A }, subject: { contains: B }]` compiles
+cleanly, and matches messages whose subject contains both substrings.
+
+Field collision is also **not** an error inside `any:` — `any: [from: X,
 from: Y]` is a valid disjunction ("sender is X or Y"). Nor is it an
 error when the conflicting fields are at different nesting depths
 (`all: [from: X, any: [from: Y, from: Z]]` is fine — the outer `from:

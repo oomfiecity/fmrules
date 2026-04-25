@@ -1,0 +1,22 @@
+[
+  {
+    "name": "subject-AND-three-substrings",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "subject:myki subject:\"auto top up\" subject:declined",
+    "markRead": true,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": null,
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": true,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

@@ -1,0 +1,13 @@
+# Multiple `subject: { contains: ... }` leaves under one `all:` is valid:
+# a single subject can contain three different substrings at once.
+rules:
+  - name: subject-AND-three-substrings
+    enabled: true
+    continue: false
+    when:
+      all:
+        - subject: { contains: "myki" }
+        - subject: { contains: "auto top up" }
+        - subject: { contains: "declined" }
+    actions:
+      - mark_read: true
