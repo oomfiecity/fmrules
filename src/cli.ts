@@ -7,6 +7,12 @@ import { command as sync } from './commands/sync.ts';
 import { command as login } from './commands/login.ts';
 import { command as installBrowsers } from './commands/install-browsers.ts';
 
+// Stamped at build time by `scripts/build.ts` via Bun.build's `define`.
+// Falls back to `dev` when running source directly (`bun run src/cli.ts`),
+// so an unbuilt invocation never claims a real version.
+declare const __FMRULES_VERSION__: string | undefined;
+const VERSION = typeof __FMRULES_VERSION__ === 'string' ? __FMRULES_VERSION__ : 'dev';
+
 await yargs(hideBin(process.argv))
   .scriptName('fmrules')
   .usage('$0 <command> [options]')
@@ -25,5 +31,5 @@ await yargs(hideBin(process.argv))
   .strict()
   .help()
   .alias('help', 'h')
-  .version()
+  .version(VERSION)
   .parseAsync();

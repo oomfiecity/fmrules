@@ -6,6 +6,12 @@ const target = Bun.argv[2] ?? "";
 const outfile = Bun.argv[3] ?? "dist/fmrules";
 mkdirSync(dirname(resolve(outfile)), { recursive: true });
 
+// Stamp the package.json `version` into the bundle so `fmrules --version`
+// returns a literal — independent of yargs's filesystem-based pkgUp lookup,
+// which is fragile inside a Bun-compiled VFS.
+const fmrulesPkgPath = Bun.fileURLToPath(new URL("../package.json", import.meta.url));
+const fmrulesPkg = JSON.parse(readFileSync(fmrulesPkgPath, "utf8")) as { version: string };
+
 const playwrightPkgPath = Bun.fileURLToPath(new URL(import.meta.resolve("playwright-core/package.json")));
 const playwrightPkgJson = JSON.parse(readFileSync(playwrightPkgPath, "utf8"));
 const playwrightPkgDir = dirname(playwrightPkgPath);
@@ -47,6 +53,9 @@ const buildArgs: Parameters<typeof Bun.build>[0] = {
   sourcemap: "linked",
   external: ["electron", "chromium-bidi"],
   plugins: [patchPlaywrightPlugin],
+  define: {
+    __FMRULES_VERSION__: JSON.stringify(fmrulesPkg.version),
+  },
 };
 
 if (process.env.BUILD_DEBUG) {
