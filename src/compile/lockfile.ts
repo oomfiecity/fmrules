@@ -1,18 +1,23 @@
 /**
- * Lockfile reconciliation — preserves `created` timestamps across recompiles.
+ * Lockfile reconciliation — preserves `created` timestamps across compiles.
  *
- * Match order:
- *   1. Fingerprint hit — reuse `created`, keep `updated` if content unchanged
- *      (emitted rule is byte-identical to its lockfile entry).
- *   2. Name hit — treat as edit; reuse `created`, refresh fingerprint.
- *   3. Neither — new rule; keep `created = now`.
+ * Keyed on the post-expansion Fastmail rule fingerprint. Match order:
+ *   1. Fingerprint hit — rule is byte-identical to last compile; reuse both
+ *      `created` and `updated` (the rule hasn't changed, no reason to bump).
+ *   2. Name hit — rule was edited but kept its name; reuse `created`,
+ *      refresh `updated` to now.
+ *   3. Neither — new rule; both timestamps = now.
  *
  * Orphaned lockfile entries (no matching emitted rule) are dropped.
+ *
+ * Generated names (foo, foo#2, foo#3 from §10.4 expansion) give the
+ * name-hit fallback a stable anchor: editing one label in a three-label
+ * YAML rule misses fingerprint for that specific generated rule but
+ * name-hits, so `created` is preserved.
  */
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { Context } from '../context.ts';
 import type { EmittedRule } from '../types.ts';
 import { ruleFingerprint } from '../util/fingerprint.ts';
 
@@ -34,9 +39,9 @@ export function reconcileLockfile(
   prev: LockfileMap,
   nowIso: string,
 ): ReconcileResult {
-  const byName = new Map<string, { fingerprint: string; entry: LockfileEntry }>();
-  for (const [fp, entry] of Object.entries(prev)) {
-    byName.set(entry.name, { fingerprint: fp, entry });
+  const byName = new Map<string, LockfileEntry>();
+  for (const entry of Object.values(prev)) {
+    byName.set(entry.name, entry);
   }
 
   const nextLockfile: LockfileMap = {};
@@ -53,7 +58,7 @@ export function reconcileLockfile(
       created = fpHit.created;
       updated = fpHit.updated;
     } else if (nameHit) {
-      created = nameHit.entry.created;
+      created = nameHit.created;
       updated = nowIso;
     } else {
       created = nowIso;
@@ -67,8 +72,8 @@ export function reconcileLockfile(
   return { rules: reconciled, lockfile: nextLockfile };
 }
 
-export async function writeLockfile(ctx: Context, lockfile: LockfileMap): Promise<void> {
-  const dir = ctx.paths.meta;
+export async function writeLockfile(cwd: string, lockfile: LockfileMap): Promise<void> {
+  const dir = path.join(cwd, 'meta');
   await fs.mkdir(dir, { recursive: true });
   const sorted = Object.keys(lockfile)
     .sort()
@@ -81,12 +86,12 @@ export async function writeLockfile(ctx: Context, lockfile: LockfileMap): Promis
 }
 
 /**
- * Read meta/lockfile.json. Missing file → `{}`. Tolerates the pre-`updated`
- * schema by defaulting `updated` to `created`, so the first compile after
- * the schema change doesn't re-bump every rule.
+ * Read meta/lockfile.json. Missing file → `{}`. Tolerates entries without
+ * `updated` (defaults to `created`), so a lockfile written by the previous
+ * major version still compiles cleanly on first run.
  */
-export async function readLockfileOptional(ctx: Context): Promise<LockfileMap> {
-  const p = path.join(ctx.paths.meta, 'lockfile.json');
+export async function readLockfileOptional(cwd: string): Promise<LockfileMap> {
+  const p = path.join(cwd, 'meta', 'lockfile.json');
   try {
     const raw = await fs.readFile(p, 'utf8');
     const parsed = JSON.parse(raw) as Record<string, Partial<LockfileEntry>>;

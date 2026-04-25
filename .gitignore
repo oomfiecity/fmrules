@@ -6,3 +6,8 @@ dist/
 /example/
 auth.json
 .env
+
+# Test outputs — fixture pipelines write mailrules.json next to manifest.yml.
+# The committed `reference/mailrules.json` is the golden; the timestamped
+# output alongside is regenerated on every `bun test` run.
+tests/fixtures/valid/*/mailrules.json

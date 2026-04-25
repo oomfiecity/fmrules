@@ -1,0 +1,7 @@
+version: 1
+order:
+  - rules/00-all-into-all.yml
+  - rules/01-any-into-any.yml
+  - rules/02-all-into-any.yml
+  - rules/03-any-into-all.yml
+  - rules/04-not-wraps-snippet.yml

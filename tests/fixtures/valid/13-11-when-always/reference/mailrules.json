@@ -1,0 +1,22 @@
+[
+  {
+    "name": "weekly-archive-everything-else",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "*",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": "All mail",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": true,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

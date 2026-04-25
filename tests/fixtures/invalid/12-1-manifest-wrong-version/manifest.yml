@@ -1,0 +1,3 @@
+version: 2
+order:
+  - rules/r.yml

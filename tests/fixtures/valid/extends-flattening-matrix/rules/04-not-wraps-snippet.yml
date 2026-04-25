@@ -1,0 +1,11 @@
+rules:
+  - name: not-wraps-snippet
+    enabled: true
+    continue: true
+    when:
+      all:
+        - not:
+            extends: [snippets/any-snippet.yml]
+        - subject: { contains: urgent }
+    actions:
+      - add_label: "Test"

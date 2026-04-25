@@ -1,0 +1,2 @@
+all:
+  - from: { domain: "b.com" }

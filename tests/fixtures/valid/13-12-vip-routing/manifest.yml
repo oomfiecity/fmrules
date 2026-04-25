@@ -1,0 +1,3 @@
+version: 1
+order:
+  - rules/05-vip.yml

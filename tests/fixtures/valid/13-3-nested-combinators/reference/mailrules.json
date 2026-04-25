@@ -1,0 +1,22 @@
+[
+  {
+    "name": "client-urgent-routing",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "(from:@mycompany.com OR from:\"@client-one.com\") (subject:urgent OR subject:asap OR priority:high) NOT (from:noreply@ OR from:\"no-reply@\" OR from:notifications@ OR from:\"auto-\" OR subject:\"out of office\" OR list:*)",
+    "markRead": false,
+    "markFlagged": true,
+    "showNotification": true,
+    "redirectTo": null,
+    "fileIn": "Priority/Clients",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": true,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

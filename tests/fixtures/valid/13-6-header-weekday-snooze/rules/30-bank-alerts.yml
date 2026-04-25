@@ -1,0 +1,15 @@
+rules:
+  - name: classify-bank-alerts
+    enabled: true
+    continue: true
+    when:
+      all:
+        - header: { name: "From", suffix: "@notifications.mybank.com" }
+        - any:
+            - header: { name: "X-Alert-Type", equals: "transaction" }
+            - header: { name: "X-Alert-Type", equals: "balance" }
+    actions:
+      - add_label: "Account alerts"
+      - snooze_until:
+          time: "08:00"
+          days: [mon, tue, wed, thu, fri]

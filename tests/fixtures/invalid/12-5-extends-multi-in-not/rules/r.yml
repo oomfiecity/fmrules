@@ -1,0 +1,11 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - not:
+            extends:
+              - snippets/a.yml
+              - snippets/b.yml
+    actions: [mark_read: true]

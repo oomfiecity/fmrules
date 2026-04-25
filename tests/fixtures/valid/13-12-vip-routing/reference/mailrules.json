@@ -1,0 +1,22 @@
+[
+  {
+    "name": "vip-priority",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "fromin:vip",
+    "markRead": false,
+    "markFlagged": true,
+    "showNotification": true,
+    "redirectTo": null,
+    "fileIn": "VIP",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": false,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

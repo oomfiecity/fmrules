@@ -1,8 +1,0 @@
-archetypes:
-  spam-kill:
-    mark_read: true
-    mark_spam: true
-    stop: true
-
-  alert:
-    file_in: Alerts

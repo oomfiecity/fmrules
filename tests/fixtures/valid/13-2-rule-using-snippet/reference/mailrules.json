@@ -1,0 +1,22 @@
+[
+  {
+    "name": "label-work-mail",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "from:@mycompany.com OR from:\"@client-one.com\" OR from:\"@client-two.com\"",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": "Work",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": false,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

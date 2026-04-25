@@ -1,0 +1,10 @@
+rules:
+  - name: label-work-mail
+    enabled: true
+    continue: true
+    when:
+      all:
+        - extends:
+            - snippets/domains/work.yml
+    actions:
+      - add_label: "Work"

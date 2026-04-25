@@ -1,0 +1,22 @@
+[
+  {
+    "name": "block-noisy-sender",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "from:spammer@example.com",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": null,
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": true,
+    "markSpam": false,
+    "stop": true,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

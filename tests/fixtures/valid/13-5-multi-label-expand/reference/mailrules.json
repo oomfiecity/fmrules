@@ -1,0 +1,45 @@
+[
+  {
+    "name": "archive-invoices-and-forward",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "subject:invoice has:attachment filetype:pdf",
+    "markRead": true,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": [
+      "bookkeeper@myaccount.com",
+      "accountant@firm.com"
+    ],
+    "fileIn": "Archive/Invoices",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": false,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  },
+  {
+    "name": "archive-invoices-and-forward#2",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "subject:invoice has:attachment filetype:pdf",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": "Finance",
+    "skipInbox": true,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": true,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

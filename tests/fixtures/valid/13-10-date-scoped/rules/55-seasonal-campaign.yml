@@ -1,0 +1,12 @@
+rules:
+  - name: tag-spring-campaign-replies
+    enabled: true
+    continue: true
+    when:
+      all:
+        - subject: { contains: "Re: Spring campaign" }
+        - date:
+            after: "2025-03-01"
+            before: "2025-05-31"
+    actions:
+      - add_label: "Campaigns/Spring 2025"

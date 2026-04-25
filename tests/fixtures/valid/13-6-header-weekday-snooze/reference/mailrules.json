@@ -1,0 +1,31 @@
+[
+  {
+    "name": "classify-bank-alerts",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "header:\"From:@notifications.mybank.com\" (header:\"X-Alert-Type:transaction\" OR header:\"X-Alert-Type:balance\")",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": "Account alerts",
+    "skipInbox": false,
+    "snoozeUntil": {
+      "time": "08:00",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+      ]
+    },
+    "discard": false,
+    "markSpam": false,
+    "stop": false,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

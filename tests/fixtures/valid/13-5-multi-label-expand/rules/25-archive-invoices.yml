@@ -1,0 +1,16 @@
+rules:
+  - name: archive-invoices-and-forward
+    enabled: true
+    continue: false
+    when:
+      all:
+        - subject: { contains: invoice }
+        - has_attachment: true
+        - filetype: pdf
+    actions:
+      - add_label: "Archive/Invoices"
+      - add_label: "Finance"
+      - archive: true
+      - send_copy_to: "bookkeeper@myaccount.com"
+      - send_copy_to: "accountant@firm.com"
+      - mark_read: true

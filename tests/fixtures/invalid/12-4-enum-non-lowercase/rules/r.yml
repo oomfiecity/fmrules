@@ -1,0 +1,8 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - filetype: PDF
+    actions: [mark_read: true]

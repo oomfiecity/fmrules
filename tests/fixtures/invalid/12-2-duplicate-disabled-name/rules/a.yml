@@ -1,0 +1,6 @@
+rules:
+  - name: foo
+    enabled: false
+    continue: false
+    when: always
+    actions: [mark_read: true]

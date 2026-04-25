@@ -1,0 +1,6 @@
+rules:
+  - name: foo
+    enabled: false
+    continue: false
+    when: always
+    actions: [pin: true]

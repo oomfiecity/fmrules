@@ -1,0 +1,8 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - date: { after: "1w" }
+    actions: [mark_read: true]

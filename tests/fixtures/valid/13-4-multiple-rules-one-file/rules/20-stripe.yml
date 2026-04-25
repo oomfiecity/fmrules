@@ -1,0 +1,32 @@
+rules:
+  - name: stripe-receipts
+    enabled: true
+    continue: false
+    when:
+      all:
+        - from: { domain_or_subdomain: "stripe.com" }
+        - subject: { contains: receipt }
+    actions:
+      - add_label: "Finance/Stripe"
+      - archive: true
+
+  - name: stripe-disputes
+    enabled: true
+    continue: false
+    when:
+      all:
+        - from: { domain_or_subdomain: "stripe.com" }
+        - subject: { contains: dispute }
+    actions:
+      - add_label: "Finance/Stripe/Disputes"
+      - pin: true
+      - notify: true
+
+  - name: stripe-other
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from: { domain_or_subdomain: "stripe.com" }
+    actions:
+      - add_label: "Finance/Stripe"

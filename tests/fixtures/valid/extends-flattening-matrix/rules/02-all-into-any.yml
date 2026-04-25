@@ -1,0 +1,10 @@
+rules:
+  - name: all-into-any
+    enabled: true
+    continue: true
+    when:
+      any:
+        - extends: [snippets/all-snippet.yml]
+        - subject: { contains: urgent }
+    actions:
+      - add_label: "Test"

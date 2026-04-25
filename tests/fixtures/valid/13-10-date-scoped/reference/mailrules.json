@@ -1,0 +1,22 @@
+[
+  {
+    "name": "tag-spring-campaign-replies",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "subject:\"Re: Spring campaign\" (after:2025-03-01 before:2025-05-31)",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": "Campaigns/Spring 2025",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": false,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

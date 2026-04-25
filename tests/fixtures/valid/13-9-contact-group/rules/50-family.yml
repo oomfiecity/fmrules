@@ -1,0 +1,11 @@
+rules:
+  - name: family-inbox
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from_in_group: "Family"
+        - not: { from_in_group: "High school" }
+    actions:
+      - add_label: "Personal/Family"
+      - notify: true

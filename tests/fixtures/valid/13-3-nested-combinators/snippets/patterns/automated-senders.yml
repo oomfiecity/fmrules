@@ -1,0 +1,5 @@
+any:
+  - from: { prefix: "noreply@" }
+  - from: { prefix: "no-reply@" }
+  - from: { prefix: "notifications@" }
+  - from: { prefix: "auto-" }

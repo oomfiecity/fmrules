@@ -1,0 +1,11 @@
+rules:
+  - name: vip-priority
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from_in_vips: true
+    actions:
+      - pin: true
+      - notify: true
+      - add_label: "VIP"

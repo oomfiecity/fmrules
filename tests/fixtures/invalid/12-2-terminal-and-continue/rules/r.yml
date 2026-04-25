@@ -1,0 +1,9 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from: { address: "x@y.com" }
+    actions:
+      - archive: true

@@ -1,0 +1,9 @@
+rules:
+  - name: mute-annoying-list
+    enabled: false
+    continue: false
+    when:
+      all:
+        - list_id: { equals: "announcements.example.com" }
+    actions:
+      - delete_to_trash: true

@@ -1,0 +1,4 @@
+version: 1
+order:
+  - rules/r.yml
+extra_key: bad

@@ -1,0 +1,59 @@
+rules:
+  - name: big
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from: { address: "a0@x.com" }
+        - from: { address: "a1@x.com" }
+        - from: { address: "a2@x.com" }
+        - from: { address: "a3@x.com" }
+        - from: { address: "a4@x.com" }
+        - from: { address: "a5@x.com" }
+        - from: { address: "a6@x.com" }
+        - from: { address: "a7@x.com" }
+        - from: { address: "a8@x.com" }
+        - from: { address: "a9@x.com" }
+        - from: { address: "a10@x.com" }
+        - from: { address: "a11@x.com" }
+        - from: { address: "a12@x.com" }
+        - from: { address: "a13@x.com" }
+        - from: { address: "a14@x.com" }
+        - from: { address: "a15@x.com" }
+        - from: { address: "a16@x.com" }
+        - from: { address: "a17@x.com" }
+        - from: { address: "a18@x.com" }
+        - from: { address: "a19@x.com" }
+        - from: { address: "a20@x.com" }
+        - from: { address: "a21@x.com" }
+        - from: { address: "a22@x.com" }
+        - from: { address: "a23@x.com" }
+        - from: { address: "a24@x.com" }
+        - from: { address: "a25@x.com" }
+        - from: { address: "a26@x.com" }
+        - from: { address: "a27@x.com" }
+        - from: { address: "a28@x.com" }
+        - from: { address: "a29@x.com" }
+        - from: { address: "a30@x.com" }
+        - from: { address: "a31@x.com" }
+        - from: { address: "a32@x.com" }
+        - from: { address: "a33@x.com" }
+        - from: { address: "a34@x.com" }
+        - from: { address: "a35@x.com" }
+        - from: { address: "a36@x.com" }
+        - from: { address: "a37@x.com" }
+        - from: { address: "a38@x.com" }
+        - from: { address: "a39@x.com" }
+        - from: { address: "a40@x.com" }
+        - from: { address: "a41@x.com" }
+        - from: { address: "a42@x.com" }
+        - from: { address: "a43@x.com" }
+        - from: { address: "a44@x.com" }
+        - from: { address: "a45@x.com" }
+        - from: { address: "a46@x.com" }
+        - from: { address: "a47@x.com" }
+        - from: { address: "a48@x.com" }
+        - from: { address: "a49@x.com" }
+        - from: { address: "a50@x.com" }
+    actions:
+      - mark_read: true

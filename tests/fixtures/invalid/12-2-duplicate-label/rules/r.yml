@@ -1,0 +1,8 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when: always
+    actions:
+      - add_label: "Foo"
+      - add_label: "Foo"

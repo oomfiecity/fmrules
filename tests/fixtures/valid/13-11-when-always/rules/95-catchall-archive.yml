@@ -1,0 +1,7 @@
+rules:
+  - name: weekly-archive-everything-else
+    enabled: true
+    continue: false
+    when: always
+    actions:
+      - add_label: "All mail"

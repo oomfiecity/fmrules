@@ -1,0 +1,10 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - not:
+            from: { address: "a@x.com" }
+            subject: { contains: urgent }
+    actions: [mark_read: true]

@@ -1,0 +1,22 @@
+rules:
+  - name: client-urgent-routing
+    enabled: true
+    continue: false
+    when:
+      all:
+        - extends:
+            - snippets/domains/work.yml
+        - any:
+            - subject: { contains: urgent }
+            - subject: { contains: asap }
+            - priority: high
+        - not:
+            any:
+              - extends:
+                  - snippets/patterns/automated-senders.yml
+              - subject: { contains: "out of office" }
+              - has_list_id: true
+    actions:
+      - add_label: "Priority/Clients"
+      - pin: true
+      - notify: true

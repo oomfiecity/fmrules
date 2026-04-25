@@ -1,0 +1,10 @@
+shared: &shared
+  domain: "x.com"
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from: *shared
+    actions: [mark_read: true]

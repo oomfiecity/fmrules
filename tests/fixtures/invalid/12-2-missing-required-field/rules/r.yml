@@ -1,0 +1,5 @@
+rules:
+  - name: r
+    enabled: true
+    when: always
+    actions: [mark_read: true]

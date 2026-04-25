@@ -1,0 +1,8 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - date: { after: "2025-05-31", before: "2025-03-01" }
+    actions: [mark_read: true]

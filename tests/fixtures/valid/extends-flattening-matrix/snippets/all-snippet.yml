@@ -1,0 +1,3 @@
+all:
+  - from: { domain: "company.com" }
+  - not: { from: { prefix: "noreply@" } }

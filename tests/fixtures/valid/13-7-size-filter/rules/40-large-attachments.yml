@@ -1,0 +1,10 @@
+rules:
+  - name: corral-large-attachments
+    enabled: true
+    continue: true
+    when:
+      all:
+        - has_attachment: true
+        - larger_than: "10MB"
+    actions:
+      - add_label: "Large attachments"

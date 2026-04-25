@@ -1,0 +1,9 @@
+rules:
+  - name: collides
+    enabled: true
+    continue: true
+    when:
+      all:
+        - extends: [snippets/only-alice.yml]
+        - from: { address: "bob@example.com" }
+    actions: [mark_read: true]

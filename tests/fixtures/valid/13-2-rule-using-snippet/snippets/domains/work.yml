@@ -1,0 +1,4 @@
+any:
+  - from: { domain_or_subdomain: "mycompany.com" }
+  - from: { domain_or_subdomain: "client-one.com" }
+  - from: { domain_or_subdomain: "client-two.com" }

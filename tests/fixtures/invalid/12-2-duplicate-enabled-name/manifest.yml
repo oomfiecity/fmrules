@@ -1,0 +1,4 @@
+version: 1
+order:
+  - rules/a.yml
+  - rules/b.yml

@@ -1,9 +1,0 @@
-rules:
-  - name: Kill obvious spam
-    mark_spam: true
-    mark_read: true
-    discard: true
-    stop: true
-    subject:
-      - You have won
-      - Congratulations winner

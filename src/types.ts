@@ -1,135 +1,178 @@
 /**
- * In-memory rule representation used throughout the compile pipeline.
- * Matchers live as structured fields + SearchIR, not as strings, so
- * modules can inspect and rewrite any part of a rule cleanly.
+ * Types for the fmrules compiler, mirroring SPEC(10).md.
  *
- * This differs from the final emitted JSON shape (see emit.ts).
+ * Three layers:
+ *   1. Raw YAML shapes (Manifest, RuleFile, SnippetFile, Rule, Condition, Action)
+ *      — authored by the user, validated in phase 2.
+ *   2. Resolved rule (Rule with all `extends:` substituted and flattened, ready for expansion).
+ *   3. Emitted Fastmail rule (EmittedRule) — the wire shape written to mailrules.json.
  */
 
-import type { SearchNode } from './compile/search-ir.ts';
+// --- Condition grammar (§8) ------------------------------------------------
 
-/**
- * Canonical matcher value. `any` OR-joins; `all` AND-joins; both → AND of
- * the two groups. Bare string and bare list are sugar for `{any: [v]}` /
- * `{any: [...]}`.
- */
-export type MatcherValue =
-  | string
-  | string[]
-  | { any?: string[]; all?: string[] };
+export type PhraseMatchType = 'contains' | 'equals' | 'prefix';
+export type AddressMatchType = 'contains' | 'prefix' | 'address' | 'domain' | 'domain_or_subdomain';
+export type HeaderMatchType = 'exists' | 'equals' | 'contains' | 'prefix' | 'suffix';
 
-/**
- * Shared search-expression grammar — cross-field OR / AND composition.
- * `any:` branches OR-join; `all:` branches AND-join. Leaf values accept
- * the same string / list / `{any, all}` shapes as flat matchers. Used by
- * rule `match:` trees and declarative module `transform:` trees.
- */
-export type SearchExpr =
-  | { any: SearchExpr[] }
-  | { all: SearchExpr[] }
-  | { from: MatcherValue }
-  | { to: MatcherValue }
-  | { subject: MatcherValue }
-  | { body: MatcherValue }
-  | { with: MatcherValue }
-  | { list: MatcherValue }
-  | { text: MatcherValue }
-  | { domain: MatcherValue }
-  | { header: { name: string; value: string } }
-  | { raw: string };
+export type FileType = 'image' | 'pdf' | 'document' | 'spreadsheet' | 'presentation' | 'email' | 'calendar';
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
-/**
- * Action fields on a rule. Keep in sync with `src/schema/fields.ts` —
- * `tests/field-registry.test.ts` asserts parity with every `kind: 'action'`
- * row and with `EmittedRule` below.
- */
+/** One phrase-matcher leaf (subject/body/anywhere/attachment_name). */
+export interface PhraseLeaf {
+  kind: 'phrase';
+  field: 'subject' | 'body' | 'anywhere' | 'attachment_name';
+  match: PhraseMatchType;
+  value: string;
+}
+
+/** One address-matcher leaf (from/to/to_only/cc/bcc/delivered_to). */
+export interface AddressLeaf {
+  kind: 'address';
+  field: 'from' | 'to' | 'to_only' | 'cc' | 'bcc' | 'delivered_to';
+  match: AddressMatchType;
+  value: string;
+}
+
+/** List-Id exact match (§8.3). */
+export interface ListIdLeaf {
+  kind: 'list_id';
+  value: string;
+}
+
+/** Size predicates. Strict comparison (§8.4). Size is in bytes. */
+export interface SizeLeaf {
+  kind: 'size';
+  op: 'larger_than' | 'smaller_than';
+  bytes: number;
+  /** Original author-written spelling, kept for error messages. */
+  raw: string;
+}
+
+/** Predicate leaf — booleans, enums, contact groups (§8.4). */
+export type PredicateLeaf =
+  | { kind: 'priority'; value: 'high' }
+  | { kind: 'has_attachment' }
+  | { kind: 'has_list_id' }
+  | { kind: 'from_in_contacts' }
+  | { kind: 'from_in_vips' }
+  | { kind: 'from_in_group'; group: string }
+  | { kind: 'to_in_contacts' }
+  | { kind: 'to_in_vips' }
+  | { kind: 'to_in_group'; group: string }
+  | { kind: 'conv_followed' }
+  | { kind: 'conv_muted' }
+  | { kind: 'msg_pinned' }
+  | { kind: 'msg_replied' }
+  | { kind: 'filetype'; value: FileType }
+  | { kind: 'mimetype'; value: string };
+
+/** Header match (§8.5). */
+export type HeaderLeaf =
+  | { kind: 'header_exists'; name: string }
+  | { kind: 'header_equals'; name: string; value: string }
+  | { kind: 'header_contains'; name: string; value: string }
+  | { kind: 'header_prefix'; name: string; value: string }
+  | { kind: 'header_suffix'; name: string; value: string };
+
+/** Date match (§8.6). */
+export interface DateLeaf {
+  kind: 'date';
+  after?: string;    // YYYY-MM-DD
+  before?: string;   // YYYY-MM-DD
+  equals?: string;   // YYYY-MM-DD (mutually exclusive with after/before)
+}
+
+/** Raw escape hatch (§8.7). */
+export interface RawLeaf {
+  kind: 'raw';
+  value: string;
+}
+
+export type Leaf =
+  | PhraseLeaf
+  | AddressLeaf
+  | ListIdLeaf
+  | SizeLeaf
+  | PredicateLeaf
+  | HeaderLeaf
+  | DateLeaf
+  | RawLeaf;
+
+/** Combinator + leaf tree (§8.2). */
+export type Condition =
+  | { kind: 'all'; children: Condition[] }
+  | { kind: 'any'; children: Condition[] }
+  | { kind: 'not'; child: Condition }
+  | { kind: 'extends'; paths: string[] }
+  | Leaf;
+
+/** Root of `when:` — either `always` or a condition tree. */
+export type When = { kind: 'always' } | Condition;
+
+// --- Actions (§10) ---------------------------------------------------------
+
+export interface SnoozeSchedule {
+  time: string;       // HH:MM 24-hour
+  days?: Weekday[];
+}
+
 export interface Actions {
-  skipInbox?: boolean;
-  markRead?: boolean;
-  markFlagged?: boolean;
-  showNotification?: boolean;
-  fileIn?: string | null;
-  redirectTo?: string[] | null;
-  snoozeUntil?: { date: string } | null;
-  discard?: boolean;
-  markSpam?: boolean;
-  stop?: boolean;
+  mark_read?: true;
+  pin?: true;
+  notify?: true;
+  add_label?: string[];          // may repeat; §10.4 expansion
+  archive?: true;                // terminal
+  send_copy_to?: string[];       // may repeat
+  snooze_until?: SnoozeSchedule;
+  delete_to_trash?: true;        // terminal
+  send_to_spam?: true;           // terminal
 }
 
-/**
- * Matcher fields on a rule, post-normalization. Modules can edit these
- * directly. Distinct fields AND-join at the top level in buildSearch.
- *
- * Keep in sync with `src/schema/fields.ts` — `tests/field-registry.test.ts`
- * asserts every `kind: 'matcher'` row has a matching key here.
- */
-export interface Matchers {
-  from?: MatcherValue;
-  to?: MatcherValue;
-  subject?: MatcherValue;
-  body?: MatcherValue;
-  header?: { name: string; value: string } | Array<{ name: string; value: string }>;
-  match?: SearchExpr;
-  list?: MatcherValue;
-  with?: MatcherValue;
-  text?: MatcherValue;
-  domain?: MatcherValue;
-  searchRaw?: string;
-}
+// --- Rule / file shapes ----------------------------------------------------
 
-export interface ModuleRef {
+export interface Rule {
   name: string;
-  args?: unknown;
-}
-
-export interface SourceMeta {
-  /** Source file path (relative to cwd). */
-  file: string;
-  /** 0-based index of the rule within its file's `rules:` list. */
-  fileIndex: number;
-  /** 0-based offset among siblings produced by fan-out modules (0 if not fanned). */
-  fanoutIndex: number;
-}
-
-/**
- * The working representation threaded through the pipeline.
- * `search` is populated by buildSearch from matchers.
- */
-export interface PartialRule {
-  name: string;
-  isEnabled?: boolean;
-  combinator?: 'all' | 'any';
-  /** True iff the rule's own body contributed at least one matcher field
-   * (pre-merge, pre-module). Used to enforce `match_all: true` on catchalls
-   * that rely entirely on inherited matchers. */
-  hasOwnMatchers: boolean;
-  /** Author opt-in declaring this rule's empty own-matchers is intentional. */
-  matchAll?: boolean;
-  matchers: Matchers;
-  /**
-   * Additional search IR fragments contributed by modules. Each entry is
-   * AND-joined with the matcher-derived tree when buildSearch runs.
-   * Modules that produce non-field-shaped expressions (e.g. OR groups over
-   * headers) push here instead of mutating `matchers`.
-   */
-  extraSearch?: SearchNode[];
-  /** Set by buildSearch; modules generally don't touch this. */
-  search?: SearchNode;
+  enabled: boolean;
+  continue: boolean;
+  when: When;
   actions: Actions;
-  /**
-   * Absolute position in the final execution order. Assigned by
-   * `assignSortOrder` using
-   *   base + meta.fileIndex * RULE_STRIDE + meta.fanoutIndex
-   * where `base` is the file's offset (see src/compile/sort.ts). An
-   * explicit `sort_order:` on the YAML rule overrides the formula.
-   */
-  sortOrder?: number;
-  meta: SourceMeta;
-  /** Resolved chain of modules (post-dedup, post-subtract). */
-  moduleChain?: ModuleRef[];
+  /** Source-file path (relative to cwd), for error reporting. */
+  sourceFile: string;
+  /** 0-based index within the source file's `rules:` list, for error reporting. */
+  sourceIndex: number;
 }
 
-/** Shape emitted to mailrules.json. Matches Fastmail's Rule schema. */
+export interface RuleFile {
+  path: string;                  // relative to cwd, e.g. "rules/10-work.yml"
+  rules: Rule[];
+}
+
+export interface SnippetFile {
+  path: string;                  // relative to cwd, e.g. "snippets/domains/work.yml"
+  root: Condition;               // top-level combinator (all|any|not)
+}
+
+export interface Manifest {
+  order: string[];               // rule file paths, relative to cwd
+}
+
+export interface Project {
+  manifest: Manifest;
+  ruleFiles: RuleFile[];
+  snippets: Map<string, SnippetFile>;  // keyed by path (e.g. "snippets/foo.yml")
+}
+
+// --- Emitted shape ---------------------------------------------------------
+
+export interface EmittedSnooze {
+  time: string;
+  days: Weekday[] | null;
+}
+
+/**
+ * Shape written to mailrules.json. Matches Fastmail's Rule import/export schema.
+ * Action field order here mirrors the emitted JSON for byte-stable diffs.
+ */
 export interface EmittedRule {
   name: string;
   isEnabled?: boolean;
@@ -142,7 +185,7 @@ export interface EmittedRule {
   redirectTo: string[] | null;
   fileIn: string | null;
   skipInbox: boolean;
-  snoozeUntil: { date: string } | null;
+  snoozeUntil: EmittedSnooze | null;
   discard: boolean;
   markSpam: boolean;
   stop: boolean;

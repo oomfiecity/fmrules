@@ -1,0 +1,9 @@
+rules:
+  - name: block-noisy-sender
+    enabled: true
+    continue: false
+    when:
+      all:
+        - from: { address: "spammer@example.com" }
+    actions:
+      - delete_to_trash: true

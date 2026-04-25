@@ -1,0 +1,22 @@
+[
+  {
+    "name": "corral-large-attachments",
+    "isEnabled": true,
+    "combinator": "all",
+    "conditions": null,
+    "search": "has:attachment minsize:10485760",
+    "markRead": false,
+    "markFlagged": false,
+    "showNotification": false,
+    "redirectTo": null,
+    "fileIn": "Large attachments",
+    "skipInbox": false,
+    "snoozeUntil": null,
+    "discard": false,
+    "markSpam": false,
+    "stop": false,
+    "previousFileInName": null,
+    "created": "TIMESTAMP",
+    "updated": "TIMESTAMP"
+  }
+]

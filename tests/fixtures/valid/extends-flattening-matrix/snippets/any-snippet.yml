@@ -1,0 +1,3 @@
+any:
+  - from: { domain: "a.com" }
+  - from: { domain: "b.com" }

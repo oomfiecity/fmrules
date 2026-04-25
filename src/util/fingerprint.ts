@@ -2,8 +2,10 @@ import { createHash } from 'node:crypto';
 import type { EmittedRule } from '../types.ts';
 
 /**
- * Stable content fingerprint of an emitted rule.
+ * Stable content fingerprint of an emitted Fastmail rule.
  * Excludes `created` and `updated` (presentation, not content).
+ * The hash is keyed on the post-expansion rule — one YAML rule with N
+ * labels produces N distinct fingerprints (one per generated name).
  */
 export function ruleFingerprint(rule: EmittedRule): string {
   const canonical = {

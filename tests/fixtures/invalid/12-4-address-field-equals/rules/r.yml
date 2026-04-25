@@ -1,0 +1,8 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from: { equals: "x@y.com" }
+    actions: [mark_read: true]

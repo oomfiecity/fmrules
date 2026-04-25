@@ -1,0 +1,8 @@
+rules:
+  - name: r
+    enabled: true
+    continue: true
+    when:
+      all:
+        - extends: [snippets/ghost.yml]
+    actions: [mark_read: true]

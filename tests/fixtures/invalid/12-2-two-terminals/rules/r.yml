@@ -1,0 +1,10 @@
+rules:
+  - name: r
+    enabled: true
+    continue: false
+    when:
+      all:
+        - from: { address: "x@y.com" }
+    actions:
+      - archive: true
+      - delete_to_trash: true
