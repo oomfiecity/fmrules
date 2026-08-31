@@ -5,6 +5,7 @@
     "combinator": "all",
     "conditions": null,
     "search": "fromin:Family -fromin:\"High school\"",
+    "filter": null,
     "markRead": false,
     "markFlagged": false,
     "showNotification": true,

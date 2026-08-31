@@ -5,6 +5,25 @@
     "combinator": "all",
     "conditions": null,
     "search": "from:@company.com -from:noreply@ subject:urgent",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "from": "@company.com"
+        },
+        {
+          "operator": "NOT",
+          "conditions": [
+            {
+              "from": "noreply@"
+            }
+          ]
+        },
+        {
+          "subject": "urgent"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,
@@ -25,6 +44,20 @@
     "combinator": "any",
     "conditions": null,
     "search": "from:@a.com OR from:@b.com OR subject:urgent",
+    "filter": {
+      "operator": "OR",
+      "conditions": [
+        {
+          "from": "@a.com"
+        },
+        {
+          "from": "@b.com"
+        },
+        {
+          "subject": "urgent"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,
@@ -45,6 +78,30 @@
     "combinator": "any",
     "conditions": null,
     "search": "from:@company.com -from:noreply@ OR subject:urgent",
+    "filter": {
+      "operator": "OR",
+      "conditions": [
+        {
+          "operator": "AND",
+          "conditions": [
+            {
+              "from": "@company.com"
+            },
+            {
+              "operator": "NOT",
+              "conditions": [
+                {
+                  "from": "noreply@"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "subject": "urgent"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,
@@ -65,6 +122,25 @@
     "combinator": "all",
     "conditions": null,
     "search": "(from:@a.com OR from:@b.com) subject:urgent",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "@a.com"
+            },
+            {
+              "from": "@b.com"
+            }
+          ]
+        },
+        {
+          "subject": "urgent"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,
@@ -85,6 +161,30 @@
     "combinator": "all",
     "conditions": null,
     "search": "NOT (from:@a.com OR from:@b.com) subject:urgent",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "operator": "NOT",
+          "conditions": [
+            {
+              "operator": "OR",
+              "conditions": [
+                {
+                  "from": "@a.com"
+                },
+                {
+                  "from": "@b.com"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "subject": "urgent"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

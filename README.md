@@ -41,9 +41,9 @@ Every `.yml` file under `rules/` must be listed in `manifest.yml`'s `order` (and
 
 ## `fmrules sync`
 
-Pushes a compiled `mailrules.json` into a Fastmail account: wipes all existing filters, imports the new set, and verifies the count against server response. Uses a headless Chromium session (via playwright-core) since Fastmail doesn't expose a public API for filter management.
+Replaces all Fastmail rules with a compiled `mailrules.json`, driven by JMAP (`Rule/set`) through an authenticated browser session — the same mechanism Fastmail's web client uses, replacing the earlier settings-UI automation, which was flaky (SPA re-render races, select-all races, reload stalls).
 
-Before importing, sync creates any labels the rules file into that don't yet exist on the account — Fastmail's filter import does not create them, and a rule firing into a missing label silently loses the label.
+Safety ordering: labels the rules file into are created first (Fastmail's rule engine never creates them — a rule firing into a missing label silently loses the label); every incoming rule is validated to carry a structured `filter` (compile output from fmrules ≥ 4.1.2) *before* the existing set is destroyed, so a bad file never wipes the account; the created count is verified against the server's confirmation.
 
 ### One-time setup
 

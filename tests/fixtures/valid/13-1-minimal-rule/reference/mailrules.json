@@ -5,6 +5,9 @@
     "combinator": "all",
     "conditions": null,
     "search": "from:spammer@example.com",
+    "filter": {
+      "from": "spammer@example.com"
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

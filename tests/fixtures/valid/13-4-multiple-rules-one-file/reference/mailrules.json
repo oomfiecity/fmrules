@@ -5,6 +5,17 @@
     "combinator": "all",
     "conditions": null,
     "search": "from:@stripe.com subject:receipt",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "from": "@stripe.com"
+        },
+        {
+          "subject": "receipt"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,
@@ -25,6 +36,17 @@
     "combinator": "all",
     "conditions": null,
     "search": "from:@stripe.com subject:dispute",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "from": "@stripe.com"
+        },
+        {
+          "subject": "dispute"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": true,
     "showNotification": true,
@@ -45,6 +67,9 @@
     "combinator": "all",
     "conditions": null,
     "search": "from:@stripe.com",
+    "filter": {
+      "from": "@stripe.com"
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

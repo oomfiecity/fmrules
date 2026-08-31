@@ -5,6 +5,66 @@
     "combinator": "all",
     "conditions": null,
     "search": "(from:@mycompany.com OR from:\"@client-one.com\") (subject:urgent OR subject:asap OR priority:high) NOT (from:noreply@ OR from:\"no-reply@\" OR from:notifications@ OR from:\"auto-\" OR subject:\"out of office\" OR list:*)",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "@mycompany.com"
+            },
+            {
+              "from": "\"@client-one.com\""
+            }
+          ]
+        },
+        {
+          "operator": "OR",
+          "conditions": [
+            {
+              "subject": "urgent"
+            },
+            {
+              "subject": "asap"
+            },
+            {
+              "isHighPriority": true
+            }
+          ]
+        },
+        {
+          "operator": "NOT",
+          "conditions": [
+            {
+              "operator": "OR",
+              "conditions": [
+                {
+                  "from": "noreply@"
+                },
+                {
+                  "from": "\"no-reply@\""
+                },
+                {
+                  "from": "notifications@"
+                },
+                {
+                  "from": "\"auto-\""
+                },
+                {
+                  "subject": "\"out of office\""
+                },
+                {
+                  "header": [
+                    "List-Id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": true,
     "showNotification": true,

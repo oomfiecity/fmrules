@@ -5,6 +5,34 @@
     "combinator": "all",
     "conditions": null,
     "search": "header:\"From:@notifications.mybank.com\" (header:\"X-Alert-Type:transaction\" OR header:\"X-Alert-Type:balance\")",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "header": [
+            "From",
+            "@notifications.mybank.com"
+          ]
+        },
+        {
+          "operator": "OR",
+          "conditions": [
+            {
+              "header": [
+                "X-Alert-Type",
+                "transaction"
+              ]
+            },
+            {
+              "header": [
+                "X-Alert-Type",
+                "balance"
+              ]
+            }
+          ]
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

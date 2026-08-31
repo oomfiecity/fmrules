@@ -5,6 +5,20 @@
     "combinator": "all",
     "conditions": null,
     "search": "from:@mycompany.com OR from:\"@client-one.com\" OR from:\"@client-two.com\"",
+    "filter": {
+      "operator": "OR",
+      "conditions": [
+        {
+          "from": "@mycompany.com"
+        },
+        {
+          "from": "\"@client-one.com\""
+        },
+        {
+          "from": "\"@client-two.com\""
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

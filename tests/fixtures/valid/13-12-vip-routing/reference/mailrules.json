@@ -5,6 +5,7 @@
     "combinator": "all",
     "conditions": null,
     "search": "fromin:vip",
+    "filter": null,
     "markRead": false,
     "markFlagged": true,
     "showNotification": true,

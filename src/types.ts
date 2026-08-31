@@ -179,6 +179,13 @@ export interface EmittedRule {
   combinator: 'all' | 'any';
   conditions: null;
   search: string;
+  /**
+   * Structured form of `search` as Fastmail parses it server-side — the
+   * shape Rule/set create requires. Rendered by emit-filter.ts from the
+   * same resolved condition tree; null when a leaf has no structured
+   * translation (sync refuses such files rather than importing them).
+   */
+  filter: unknown;
   markRead: boolean;
   markFlagged: boolean;
   showNotification: boolean;

@@ -5,6 +5,7 @@
     "combinator": "all",
     "conditions": null,
     "search": "*",
+    "filter": null,
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

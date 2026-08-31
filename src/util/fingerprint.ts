@@ -11,6 +11,10 @@ export function ruleFingerprint(rule: EmittedRule): string {
   const canonical = {
     name: rule.name,
     search: rule.search,
+    // Structured filter is derived from the same condition tree as
+    // `search`, but a renderer change alters emitted content without
+    // touching `search` — include it so re-emission is detected.
+    filter: rule.filter,
     combinator: rule.combinator,
     markRead: rule.markRead,
     markFlagged: rule.markFlagged,

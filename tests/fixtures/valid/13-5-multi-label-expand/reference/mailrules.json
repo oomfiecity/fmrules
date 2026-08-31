@@ -5,6 +5,20 @@
     "combinator": "all",
     "conditions": null,
     "search": "subject:invoice has:attachment filetype:pdf",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "subject": "invoice"
+        },
+        {
+          "hasAttachment": true
+        },
+        {
+          "attachmentType": "pdf"
+        }
+      ]
+    },
     "markRead": true,
     "markFlagged": false,
     "showNotification": false,
@@ -28,6 +42,20 @@
     "combinator": "all",
     "conditions": null,
     "search": "subject:invoice has:attachment filetype:pdf",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "subject": "invoice"
+        },
+        {
+          "hasAttachment": true
+        },
+        {
+          "attachmentType": "pdf"
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

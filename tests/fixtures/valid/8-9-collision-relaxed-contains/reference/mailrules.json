@@ -5,6 +5,20 @@
     "combinator": "all",
     "conditions": null,
     "search": "subject:myki subject:\"auto top up\" subject:declined",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "subject": "myki"
+        },
+        {
+          "subject": "\"auto top up\""
+        },
+        {
+          "subject": "declined"
+        }
+      ]
+    },
     "markRead": true,
     "markFlagged": false,
     "showNotification": false,

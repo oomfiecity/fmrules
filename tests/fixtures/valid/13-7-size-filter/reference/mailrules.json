@@ -5,6 +5,17 @@
     "combinator": "all",
     "conditions": null,
     "search": "has:attachment minsize:10485760",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "hasAttachment": true
+        },
+        {
+          "minSize": 10485760
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,

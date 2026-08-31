@@ -16,7 +16,41 @@
 import { launch } from '../sync/browser.ts';
 
 const JMAP_URL_HINT = 'jmap/api';
-const MAIL_CAPABILITY = 'urn:ietf:params:jmap:mail';
+
+/**
+ * The web client's full capability list. The session speaks for many
+ * features (mail, rules, contacts, …) and the exact capability that
+ * gates a given method isn't always the obvious one — e.g. Rule/get
+ * rejects a minimal [core, mail, rules] list. Sending the complete set
+ * the app itself negotiates sidesteps the guessing entirely.
+ */
+const USING = [
+  'urn:ietf:params:jmap:vacationresponse',
+  'https://www.fastmail.com/dev/contacts',
+  'https://www.fastmail.com/dev/filenode',
+  'https://www.fastmail.com/dev/customer',
+  'https://www.fastmail.com/dev/auth',
+  'https://www.fastmail.com/dev/calendars',
+  'urn:ietf:params:jmap:contacts',
+  'urn:ietf:params:jmap:submission',
+  'https://www.fastmail.com/dev/performance',
+  'https://www.fastmail.com/dev/blob2',
+  'urn:ietf:params:jmap:mail',
+  'https://www.fastmail.com/dev/backup',
+  'https://www.fastmail.com/dev/rules',
+  'urn:ietf:params:jmap:webpush-vapid',
+  'https://www.fastmail.com/dev/jscalendarbis',
+  'urn:ietf:params:jmap:quota',
+  'https://www.fastmail.com/dev/user',
+  'https://www.fastmail.com/dev/files',
+  'urn:ietf:params:jmap:core',
+  'https://www.fastmail.com/dev/mail',
+  'https://www.fastmail.com/dev/notes',
+  'urn:ietf:params:jmap:blob',
+  'urn:ietf:params:jmap:calendars',
+  'urn:ietf:params:jmap:principals',
+  'https://www.fastmail.com/dev/compress',
+];
 
 export interface JmapSessionOptions {
   /** Path to the Fastmail storage state written by `fmrules login`. */
@@ -32,6 +66,15 @@ export interface JmapMailbox {
   name: string;
   role: string | null;
   parentId: string | null;
+}
+
+/** A Fastmail rule (filter) in the server's Rule/get shape. */
+export interface JmapRule {
+  id: string;
+  name: string;
+  isEnabled?: boolean;
+  isDisabled?: boolean;
+  [key: string]: unknown;
 }
 
 /** One [name, arguments, clientCallId] tuple. */
@@ -140,7 +183,7 @@ export class JmapSession {
         if (!r.ok) throw new Error(`HTTP ${r.status}: ${text.slice(0, 300)}`);
         return JSON.parse(text);
       },
-      { url: this.url, token: this.token, body: { using: [MAIL_CAPABILITY, 'urn:ietf:params:jmap:core'], methodCalls } },
+      { url: this.url, token: this.token, body: { using: USING, methodCalls } },
     )) as { methodResponses: JmapMethodResponse[] };
 
     for (const [name, data] of res.methodResponses) {
@@ -245,6 +288,66 @@ export class JmapSession {
       throw new JmapError(`Could not create label "${name}": ${JSON.stringify(data.notCreated ?? {}).slice(0, 300)}`);
     }
     return mailbox;
+  }
+
+  /** All rules (filters) on the account. */
+  async getRules(): Promise<JmapRule[]> {
+    const res = await this.request([['Rule/get', { accountId: this.accountId, ids: null }, 'r0']]);
+    return (res[0]![1] as { list: JmapRule[] }).list ?? [];
+  }
+
+  /** Destroy rules by id. Returns the ids actually destroyed. */
+  async destroyRules(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const res = await this.request([['Rule/set', { accountId: this.accountId, destroy: ids }, 'r0']]);
+    const data = res[0]![1] as { destroyed?: Record<string, string>; notDestroyed?: Record<string, unknown> };
+    if (data.notDestroyed && Object.keys(data.notDestroyed).length > 0) {
+      throw new JmapError(
+        `Rule/set destroy failed for ${Object.keys(data.notDestroyed).length} rule(s): ` +
+          JSON.stringify(data.notDestroyed).slice(0, 300),
+      );
+    }
+    return Object.values(data.destroyed ?? {});
+  }
+
+  /**
+   * Create rules from mailrules.json entries (the Fastmail import shape).
+   * Timestamps are stripped — the server stamps its own on create — and
+   * `fileIn` label names are translated to mailbox ids, which the web
+   * client's import dialog does client-side before its Rule/set.
+   * Returns the created count as confirmed by the server.
+   */
+  async createRules(
+    rules: Record<string, unknown>[],
+    mailboxIdsByLabelName: Map<string, string>,
+  ): Promise<number> {
+    if (rules.length === 0) return 0;
+    const create: Record<string, Record<string, unknown>> = {};
+    for (const [i, rule] of rules.entries()) {
+      const payload: Record<string, unknown> = { ...rule };
+      delete payload.created;
+      delete payload.updated;
+      if (payload.fileIn != null) {
+        const id = mailboxIdsByLabelName.get(String(payload.fileIn).toLowerCase());
+        if (!id) {
+          throw new JmapError(
+            `label "${String(payload.fileIn)}" has no mailbox on this account — ` +
+              'create it before importing rules that file into it.',
+          );
+        }
+        payload.fileIn = id;
+      }
+      create[`k${i}`] = payload;
+    }
+    const res = await this.request([['Rule/set', { accountId: this.accountId, create }, 'r0']]);
+    const data = res[0]![1] as { created?: Record<string, unknown>; notCreated?: Record<string, unknown> };
+    if (data.notCreated && Object.keys(data.notCreated).length > 0) {
+      throw new JmapError(
+        `Rule/set create failed for ${Object.keys(data.notCreated).length} rule(s): ` +
+          JSON.stringify(data.notCreated).slice(0, 300),
+      );
+    }
+    return Object.keys(data.created ?? {}).length;
   }
 
   async close(): Promise<void> {

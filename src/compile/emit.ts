@@ -32,13 +32,14 @@ import type {
   When,
 } from '../types.ts';
 import type { ExpandedRule } from './expand.ts';
+import { emitRuleFilter } from './emit-filter.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Search-string rendering
 
 const NEEDS_QUOTING = /[\s():{}"'-]/;
 
-function quote(v: string): string {
+export function quote(v: string): string {
   if (v.length > 0 && !NEEDS_QUOTING.test(v)) return v;
   return `"${v.replace(/"/g, '\\"')}"`;
 }
@@ -334,6 +335,7 @@ export function emitRule(rule: ExpandedRule, nowIso: string): EmittedRule {
   const combinator = deriveCombinator(rule.when, rule.resolvedCondition);
   const actionParts = emitActions(rule.actions);
   const stop = !rule.continueFlag;
+  const { filter: structuredFilter } = emitRuleFilter(rule.when, rule.resolvedCondition);
   const out: EmittedRule = {
     name: rule.name,
     // YAML's `enabled` drives Fastmail's isEnabled. Disabled rules never
@@ -342,6 +344,7 @@ export function emitRule(rule: ExpandedRule, nowIso: string): EmittedRule {
     combinator,
     conditions: null,
     search,
+    filter: structuredFilter,
     ...actionParts,
     stop,
     previousFileInName: null,

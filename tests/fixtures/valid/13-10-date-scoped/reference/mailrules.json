@@ -5,6 +5,25 @@
     "combinator": "all",
     "conditions": null,
     "search": "subject:\"Re: Spring campaign\" (after:2025-03-01 before:2025-05-31)",
+    "filter": {
+      "operator": "AND",
+      "conditions": [
+        {
+          "subject": "\"Re: Spring campaign\""
+        },
+        {
+          "operator": "AND",
+          "conditions": [
+            {
+              "after": "2025-03-01T00:00:00.000Z"
+            },
+            {
+              "before": "2025-05-31T00:00:00.000Z"
+            }
+          ]
+        }
+      ]
+    },
     "markRead": false,
     "markFlagged": false,
     "showNotification": false,
