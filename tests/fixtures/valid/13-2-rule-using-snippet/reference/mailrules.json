@@ -4,18 +4,42 @@
     "isEnabled": true,
     "combinator": "all",
     "conditions": null,
-    "search": "from:@mycompany.com OR from:\"@client-one.com\" OR from:\"@client-two.com\"",
+    "search": "from:(@mycompany.com OR .mycompany.com) OR from:(\"@client-one.com\" OR \".client-one.com\") OR from:(\"@client-two.com\" OR \".client-two.com\")",
     "filter": {
       "operator": "OR",
       "conditions": [
         {
-          "from": "@mycompany.com"
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "@mycompany.com"
+            },
+            {
+              "from": ".mycompany.com"
+            }
+          ]
         },
         {
-          "from": "\"@client-one.com\""
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "\"@client-one.com\""
+            },
+            {
+              "from": "\".client-one.com\""
+            }
+          ]
         },
         {
-          "from": "\"@client-two.com\""
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "\"@client-two.com\""
+            },
+            {
+              "from": "\".client-two.com\""
+            }
+          ]
         }
       ]
     },

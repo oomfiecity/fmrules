@@ -65,6 +65,26 @@ function addressOr(fields: string[], value: string): unknown {
   return { operator: 'OR', conditions };
 }
 
+/** Fields an address-field leaf covers: spec `to:` spans all four (§8.3). */
+function addressFilterFields(field: string): string[] {
+  switch (field) {
+    case 'from':
+      return ['from'];
+    case 'to':
+      return ['to', 'cc', 'bcc', 'deliveredTo'];
+    case 'to_only':
+      return ['to'];
+    case 'cc':
+      return ['cc'];
+    case 'bcc':
+      return ['bcc'];
+    case 'delivered_to':
+      return ['deliveredTo'];
+    default:
+      return [field];
+  }
+}
+
 function renderPredicate(leaf: PredicateLeaf, out: RenderOut): unknown {
   switch (leaf.kind) {
     case 'priority':
@@ -149,23 +169,18 @@ function renderLeaf(node: Condition, out: RenderOut): unknown {
       // The parsed filter value is the search token exactly as the
       // search string wrote it — quotes included when the renderer
       // quoted it (hyphens, spaces, …), bare when it didn't.
-      const value =
-        node.match === 'domain' || node.match === 'domain_or_subdomain' ? quote(`@${node.value}`) : quote(node.value);
-      switch (node.field) {
-        case 'from':
-          return { from: value };
-        case 'to':
-          return addressOr(['to', 'cc', 'bcc', 'deliveredTo'], value);
-        case 'to_only':
-          return { to: value };
-        case 'cc':
-          return { cc: value };
-        case 'bcc':
-          return { bcc: value };
-        case 'delivered_to':
-          return { deliveredTo: value };
+      const fields = addressFilterFields(node.field);
+      if (node.match === 'domain_or_subdomain') {
+        // Subdomain-inclusive per SPEC §8.3: live-verified, the @ arm
+        // matches only the apex domain, so OR it with a dot-anchored arm
+        // for subdomains (mirrors the search string's from:(@d OR .d)).
+        const values = [quote(`@${node.value}`), quote(`.${node.value}`)];
+        const conditions = fields.flatMap((f) => values.map((v) => ({ [f]: v })));
+        return conditions.length === 1 ? conditions[0] : { operator: 'OR', conditions };
       }
-      break;
+      const value = node.match === 'domain' ? quote(`@${node.value}`) : quote(node.value);
+      const conditions = fields.map((f) => ({ [f]: value }));
+      return conditions.length === 1 ? conditions[0] : { operator: 'OR', conditions };
     }
     case 'list_id':
       return { listId: node.value.replace(/^<+/, '').replace(/>+$/, '') };

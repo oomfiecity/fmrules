@@ -15,6 +15,12 @@
  *
  *   spec `from`        → {from}                     (search from:)
  *   spec `to`          → OR to/cc/bcc/deliveredTo   (§8.3: to: covers all four)
+ *   address match `domain_or_subdomain` → OR of the @domain (apex) and
+ *                        .domain (subdomain) arms per covered field —
+ *                        live-verified, from:@domain matches only the
+ *                        apex domain, so the dot-anchored arm is required
+ *                        for the subdomain-inclusive match SPEC §8.3
+ *                        promises (mirrors emit.ts/emit-filter.ts)
  *   spec `to_only`     → {to}                       (search tonotcc:)
  *   spec `delivered_to`→ {deliveredTo}              (search deliveredto:)
  *   spec `anywhere`    → {text}                     (search with:)
@@ -62,12 +68,15 @@ export interface RenderedFilter {
   unsupported: string[];
 }
 
-function renderAddressValue(match: string, value: string): string {
-  // emit.ts renders `domain` and `domain_or_subdomain` with an "@" prefix;
-  // the same value works for the structured from/to/… conditions.
-  if (match === 'domain' || match === 'domain_or_subdomain') return `@${value}`;
-  return value;
-}
+/** JMAP Email/query filter fields each spec address field covers (§8.3). */
+const ADDRESS_QUERY_FIELDS: Record<string, string[]> = {
+  from: ['from'],
+  to: ['to', 'cc', 'bcc', 'deliveredTo'],
+  to_only: ['to'],
+  cc: ['cc'],
+  bcc: ['bcc'],
+  delivered_to: ['deliveredTo'],
+};
 
 function renderPredicate(leaf: PredicateLeaf, out: RenderedFilter): unknown {
   switch (leaf.kind) {
@@ -132,7 +141,18 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
       }
       break; // unreachable
     case 'address': {
-      const value = renderAddressValue(node.match, node.value);
+      // Query values are raw substrings (no renderer quoting here).
+      const fields = ADDRESS_QUERY_FIELDS[node.field] ?? [node.field === 'to_only' ? 'to' : node.field];
+      if (node.match === 'domain_or_subdomain') {
+        // Subdomain-inclusive per SPEC §8.3: live-verified, from:@d
+        // matches only the apex domain; OR the dot-anchored subdomain
+        // arm — mirrors the compile-side from:(@d OR .d) emission so
+        // verify/apply evaluate the same match the installed rule does.
+        const values = [`@${node.value}`, `.${node.value}`];
+        const arms = fields.flatMap((f) => values.map((v) => ({ [f]: v })));
+        return arms.length === 1 ? arms[0] : { operator: 'OR', conditions: arms };
+      }
+      const value = node.match === 'domain' ? `@${node.value}` : node.value;
       switch (node.field) {
         case 'from':
           return { from: value };
@@ -151,7 +171,7 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
         case 'delivered_to':
           return { deliveredTo: value };
       }
-      break; // unreachable
+      break;
     }
     case 'list_id': {
       // The server rejects a `listId` filter condition outright (observed

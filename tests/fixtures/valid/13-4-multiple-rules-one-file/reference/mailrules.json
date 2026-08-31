@@ -4,12 +4,20 @@
     "isEnabled": true,
     "combinator": "all",
     "conditions": null,
-    "search": "from:@stripe.com subject:receipt",
+    "search": "from:(@stripe.com OR .stripe.com) subject:receipt",
     "filter": {
       "operator": "AND",
       "conditions": [
         {
-          "from": "@stripe.com"
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "@stripe.com"
+            },
+            {
+              "from": ".stripe.com"
+            }
+          ]
         },
         {
           "subject": "receipt"
@@ -35,12 +43,20 @@
     "isEnabled": true,
     "combinator": "all",
     "conditions": null,
-    "search": "from:@stripe.com subject:dispute",
+    "search": "from:(@stripe.com OR .stripe.com) subject:dispute",
     "filter": {
       "operator": "AND",
       "conditions": [
         {
-          "from": "@stripe.com"
+          "operator": "OR",
+          "conditions": [
+            {
+              "from": "@stripe.com"
+            },
+            {
+              "from": ".stripe.com"
+            }
+          ]
         },
         {
           "subject": "dispute"
@@ -66,9 +82,17 @@
     "isEnabled": true,
     "combinator": "all",
     "conditions": null,
-    "search": "from:@stripe.com",
+    "search": "from:(@stripe.com OR .stripe.com)",
     "filter": {
-      "from": "@stripe.com"
+      "operator": "OR",
+      "conditions": [
+        {
+          "from": "@stripe.com"
+        },
+        {
+          "from": ".stripe.com"
+        }
+      ]
     },
     "markRead": false,
     "markFlagged": false,

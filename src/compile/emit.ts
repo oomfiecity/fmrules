@@ -63,11 +63,15 @@ function renderAddress(leaf: AddressLeaf): string {
     case 'domain':
       return renderField(op, `@${leaf.value}`);
     case 'domain_or_subdomain':
-      // Fastmail's `from:@example.com` matches example.com and its
-      // subdomains. The spec's `domain` wants "exactly example.com" —
-      // identical wire encoding today (§2 hedge about spec vs Fastmail
-      // semantics; author-side, the distinction is documented).
-      return renderField(op, `@${leaf.value}`);
+      // Live-verified (2026-08-31): `from:@example.com` matches only
+      // senders at exactly example.com — NOT subdomains (probed:
+      // from:@boost.com.au returned 0 hits while 8 messages existed
+      // from notify.boost.com.au). The subdomain-inclusive match SPEC
+      // §8.3 promises needs two arms: the @ arm for the apex domain,
+      // plus a dot-anchored arm for subdomains (the dot prevents
+      // display-name matches; .example.com occurs only inside
+      // sub.example.com addresses).
+      return `${op}:(${quote(`@${leaf.value}`)} OR ${quote(`.${leaf.value}`)})`;
   }
 }
 

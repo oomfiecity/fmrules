@@ -4,7 +4,7 @@
     "isEnabled": true,
     "combinator": "all",
     "conditions": null,
-    "search": "(from:@mycompany.com OR from:\"@client-one.com\") (subject:urgent OR subject:asap OR priority:high) NOT (from:noreply@ OR from:\"no-reply@\" OR from:notifications@ OR from:\"auto-\" OR subject:\"out of office\" OR list:*)",
+    "search": "(from:(@mycompany.com OR .mycompany.com) OR from:(\"@client-one.com\" OR \".client-one.com\")) (subject:urgent OR subject:asap OR priority:high) NOT (from:noreply@ OR from:\"no-reply@\" OR from:notifications@ OR from:\"auto-\" OR subject:\"out of office\" OR list:*)",
     "filter": {
       "operator": "AND",
       "conditions": [
@@ -12,10 +12,26 @@
           "operator": "OR",
           "conditions": [
             {
-              "from": "@mycompany.com"
+              "operator": "OR",
+              "conditions": [
+                {
+                  "from": "@mycompany.com"
+                },
+                {
+                  "from": ".mycompany.com"
+                }
+              ]
             },
             {
-              "from": "\"@client-one.com\""
+              "operator": "OR",
+              "conditions": [
+                {
+                  "from": "\"@client-one.com\""
+                },
+                {
+                  "from": "\".client-one.com\""
+                }
+              ]
             }
           ]
         },

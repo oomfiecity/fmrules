@@ -51,6 +51,14 @@ describe('renderFilter — address fields (§8.3)', () => {
     expect(out.condition).toEqual({ from: '@example.com' });
   });
 
+  test('from domain_or_subdomain → OR of apex + dot-anchored arms (mirrors compile-side emission)', () => {
+    const out = renderFilter(...leaf({ kind: 'address', field: 'from', match: 'domain_or_subdomain', value: 'boost.com.au' }));
+    expect(out.condition).toEqual({
+      operator: 'OR',
+      conditions: [{ from: '@boost.com.au' }, { from: '.boost.com.au' }],
+    });
+  });
+
   test('to → OR over to/cc/bcc/deliveredTo', () => {
     const out = renderFilter(...leaf({ kind: 'address', field: 'to', match: 'address', value: 'a@b.c' }));
     expect(out.condition).toEqual({

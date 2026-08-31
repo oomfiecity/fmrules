@@ -1678,6 +1678,15 @@ whole rule is refused. `fmrules compile`/`check` warn when emitting such
 rules, and `fmrules sync` refuses a file containing them rather than
 wiping the account and failing mid-import.
 
+**`domain_or_subdomain` rendering.** Fastmail's `from:@example.com`
+matches senders at exactly `example.com` — *not* its subdomains
+(live-verified: `from:@boost.com.au` matched 0 messages while 8 existed
+from `notify.boost.com.au`). To deliver the subdomain-inclusive match
+§8.3 promises, both the search string and the structured filter render
+the match as an OR of two arms: the apex domain (`@example.com`) and a
+dot-anchored subdomain arm (`.example.com`, which cannot occur in
+display names).
+
 **Bootstrap round-tripping.** Because the emit target is Fastmail's own
 format, a future bootstrap importer (§11.4) has a defined input: read
 rules from the account, detect multi-label expansion patterns

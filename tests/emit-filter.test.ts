@@ -25,6 +25,31 @@ describe('emitRuleFilter — supported leaves', () => {
     expect(out).toEqual({ filter: { from: '@example.com' }, unsupported: null });
   });
 
+  test('from domain_or_subdomain → OR of apex + dot-anchored arms (subdomain match, live-verified)', () => {
+    const out = emitRuleFilter(...leaf({ kind: 'address', field: 'from', match: 'domain_or_subdomain', value: 'boost.com.au' }));
+    expect(out.filter).toEqual({
+      operator: 'OR',
+      conditions: [{ from: '@boost.com.au' }, { from: '.boost.com.au' }],
+    });
+  });
+
+  test('to domain_or_subdomain → OR of arms across all four recipient fields', () => {
+    const out = emitRuleFilter(...leaf({ kind: 'address', field: 'to', match: 'domain_or_subdomain', value: 'example.com' }));
+    expect(out.filter).toEqual({
+      operator: 'OR',
+      conditions: [
+        { to: '@example.com' },
+        { to: '.example.com' },
+        { cc: '@example.com' },
+        { cc: '.example.com' },
+        { bcc: '@example.com' },
+        { bcc: '.example.com' },
+        { deliveredTo: '@example.com' },
+        { deliveredTo: '.example.com' },
+      ],
+    });
+  });
+
   test('phrase values keep the renderer quoting (hyphen needs quotes)', () => {
     const out = emitRuleFilter(...leaf({ kind: 'phrase', field: 'subject', match: 'contains', value: 'two-part' }));
     expect(out).toEqual({ filter: { subject: '"two-part"' }, unsupported: null });
