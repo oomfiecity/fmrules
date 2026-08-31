@@ -12,6 +12,8 @@ Format reference: [SPEC(10).md](SPEC(10).md).
 | `fmrules compile` | Emit `mailrules.json` (+ `meta/lockfile.json` by default). |
 | `fmrules login` | Open a browser to sign in to Fastmail; save session to `auth.json`. |
 | `fmrules sync` | Delete all Fastmail filters and import a `mailrules.json` (local file or GitHub release). |
+| `fmrules verify` | Check rules against live mailbox content, server-side and read-only. |
+| `fmrules apply` | Retroactively apply rules to an existing mailbox via JMAP (SPEC(10).md §11.3). |
 | `fmrules install-browsers` | Pre-download Chromium via playwright-core (sync auto-installs on first use if skipped). |
 
 Global flags (all commands): `--cwd`, `--verbose`/`-v`, `--quiet`/`-q`, `--color`.
@@ -86,3 +88,47 @@ Exactly one of `--file` or `--repo` must be provided.
 ## Drift warning
 
 The compiler is one-way — YAML is the source of truth. Any change made through Fastmail's web interface will be overwritten by the next `fmrules sync`. Treat the Fastmail web UI as read-only for rules once an `fmrules` project is in use. See SPEC(10).md §11.3.
+
+## `fmrules verify`
+
+Evaluates every rule (or `--rule <substring>`) against real mailbox content
+using Fastmail's own search engine, without changing anything. For each rule
+it reports how many messages in the scope mailbox the rule's condition would
+claim, a sample of matches, and the actions that would fire. Rules that match
+nothing are flagged — usually the fastest signal that a newly written or
+edited rule doesn't mean what you intended.
+
+```
+fmrules verify                                  # all rules vs the whole Inbox
+fmrules verify --rule "Tumblr" --limit 3        # one rule, 3 samples
+fmrules verify --mailbox Archive --after 2026-01-01
+```
+
+Matching is delegated to the server via structured JMAP `Email/query`
+filters, so semantics (stemming, header substring matching, address handling)
+are Fastmail's own rather than a reimplementation. Two caveats:
+
+- Delivery-time predicates (`conv_followed`, `msg_pinned`, …) match against
+  *current* message state, which is not necessarily the state at delivery.
+- VIP and contact-group membership have no server-side filter equivalent;
+  rules using them are reported as not server-evaluable.
+
+## `fmrules apply`
+
+Fastmail's rule engine only fires at delivery. `apply` is the external tool
+SPEC(10).md §11.3 anticipated: it evaluates the rule chain (manifest order,
+stop semantics) through the same server-side matching as `verify`, then
+performs each rule's actions directly with `Email/set` — labels, read state,
+archive, spam, trash.
+
+```
+fmrules apply --dry-run                # plan only: per-rule match and change counts
+fmrules apply --yes                    # actually mutate (required, no prompt)
+fmrules apply --rule "Zeus" --yes      # scope to one rule
+fmrules apply --after 2026-04-22 --yes # scope by date
+```
+
+Mutation notes: current `mailboxIds`/`keywords` are fetched per message and
+complete desired maps are written back (Fastmail's `Email/set` replaces whole
+maps). Delivery-only actions (`notify`, `send_copy_to`, `snooze_until`) are
+reported and skipped.

@@ -6,6 +6,8 @@ import { command as check } from './commands/check.ts';
 import { command as sync } from './commands/sync.ts';
 import { command as login } from './commands/login.ts';
 import { command as installBrowsers } from './commands/install-browsers.ts';
+import { command as verify } from './commands/verify.ts';
+import { command as apply } from './commands/apply.ts';
 
 // Stamped at build time by `scripts/build.ts` via Bun.build's `define`.
 // Falls back to `dev` when running source directly (`bun run src/cli.ts`),
@@ -27,7 +29,9 @@ await yargs(hideBin(process.argv))
   .command(sync)
   .command(login)
   .command(installBrowsers)
-  .demandCommand(1, 'Specify a subcommand (compile | check | sync | login | install-browsers)')
+  .command(verify)
+  .command(apply)
+  .demandCommand(1, 'Specify a subcommand (compile | check | sync | login | install-browsers | verify | apply)')
   .strict()
   .help()
   .alias('help', 'h')

@@ -52,6 +52,12 @@ export interface PipelineResult {
   emittedCount: number;
   files: readonly RuleFile[];
   orphanedSnippets: string[];
+  /**
+   * Post-expansion rules in evaluation order (§10.4). Populated from phase
+   * 4 onward — available even when errors short-circuit later phases, so
+   * live-evaluation tools (verify/apply) can surface what would have run.
+   */
+  expandedRules?: readonly ExpandedRule[];
 }
 
 function warnOrphanedSnippets(
@@ -167,6 +173,8 @@ export async function runPipeline(
     expanded.push(...expandRule(r.rule, r.condition, errors));
   }
 
+  const expandedRulesOut: readonly ExpandedRule[] = expanded;
+
   // ── Phase 5: Emit ─────────────────────────────────────────────────────
   // We always compute the emission — it's cheap and gives `check` a useful
   // total count. But we only write to disk when there are zero errors and
@@ -196,6 +204,7 @@ export async function runPipeline(
       emittedCount: finalEmitted.length,
       files: ruleFiles,
       orphanedSnippets: orphaned,
+      expandedRules: expandedRulesOut,
     };
   }
 
@@ -206,6 +215,7 @@ export async function runPipeline(
       emittedCount: finalEmitted.length,
       files: ruleFiles,
       orphanedSnippets: orphaned,
+      expandedRules: expandedRulesOut,
     };
   }
 
@@ -218,6 +228,7 @@ export async function runPipeline(
       emittedCount: finalEmitted.length,
       files: ruleFiles,
       orphanedSnippets: orphaned,
+      expandedRules: expandedRulesOut,
     };
   }
 
@@ -234,6 +245,7 @@ export async function runPipeline(
     emittedCount: finalEmitted.length,
     files: ruleFiles,
     orphanedSnippets: orphaned,
+    expandedRules: expandedRulesOut,
   };
 }
 
