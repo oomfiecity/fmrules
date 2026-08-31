@@ -143,11 +143,11 @@ describe('renderFilter — headers and dates', () => {
     expect(renderFilter(...leaf({ kind: 'header_exists', name: 'List-Id' })).condition).toEqual({ header: ['List-Id'] });
   });
 
-  test('date after/before → ISO bounds; equals → day window', () => {
-    // Expected values are local-midnight ISO (same conversion as the
-    // implementation), so the test is timezone-independent.
-    const midnight = (d: string) => new Date(`${d}T00:00:00`).toISOString();
-    const nextMidnight = (d: string) => new Date(new Date(`${d}T00:00:00`).getTime() + 24 * 3600 * 1000).toISOString();
+  test('date after/before → UTC ISO bounds; equals → UTC day window', () => {
+    // Day boundaries are pinned to UTC (util/dates.ts) so compile output
+    // is deterministic across machines — the test is timezone-independent.
+    const midnight = (d: string) => new Date(`${d}T00:00:00Z`).toISOString();
+    const nextMidnight = (d: string) => new Date(new Date(`${d}T00:00:00Z`).getTime() + 24 * 3600 * 1000).toISOString();
 
     const after = renderFilter(...leaf({ kind: 'date', after: '2026-04-22' }));
     expect(after.condition).toEqual({ after: midnight('2026-04-22') });

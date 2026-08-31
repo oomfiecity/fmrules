@@ -1,0 +1,23 @@
+# A rule mixing supported and unsupported condition leaves must compile
+# cleanly but emit `filter: null` (fail-closed — see src/compile/
+# emit-filter.ts) and surface a compile warning naming the reason.
+rules:
+  - name: contractors-excluded
+    enabled: true
+    continue: true
+    when:
+      all:
+        - from: { domain: "example.com" }
+        - not: { from_in_group: "Contractors" }
+    actions:
+      - add_label: "Work"
+
+  - name: plain-supported
+    enabled: true
+    continue: false
+    when:
+      all:
+        - subject: { contains: "Invoice" }
+    actions:
+      - add_label: "Receipts"
+      - archive: true

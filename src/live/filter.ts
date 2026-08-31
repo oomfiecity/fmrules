@@ -23,9 +23,11 @@
  *   spec `size`        → {minSize}/{maxSize}
  *   predicates         → hasKeyword/$seen-family, isHighPriority,
  *                        attachmentType, fromAnyContact, …
- *   spec `date`        → {after}/{before} ISO timestamps (local midnight —
- *                        the same conversion the web client applies to
- *                        date-only search values)
+ *   spec `date`        → {after}/{before} ISO timestamps (UTC midnight —
+ *                        the same boundary the compile-side rule filter
+ *                        emitter pins via util/dates.ts, so verify/apply
+ *                        evaluate the same windows the installed rules
+ *                        use)
  *   spec `raw`         → {text} (passed through verbatim; the compiler's
  *                        stripped-operator scan (§8.7) has already refused
  *                        operators Fastmail's rule engine drops, so
@@ -39,24 +41,25 @@
  * Delivery-time caveat: `conv_followed`, `conv_muted`, `msg_pinned` and
  * `msg_replied` match against CURRENT message state (§ "On rule execution
  * context"), which is not necessarily the state at delivery time.
+ *
+ * Divergence caveat — `anywhere` and `raw: with:`: the compile-side
+ * filter emitter (src/compile/emit-filter.ts) models `with:` as an OR
+ * across address fields (from/to/cc/bcc/deliveredTo), verified against
+ * live Rule/get output — that is what the INSTALLED delivery-time rule
+ * matches. Email/query has no equivalent address-fields condition
+ * exposed here, so this renderer approximates those leaves as a
+ * full-text `{text}` match. Counts for `anywhere`/`with:` rules from
+ * verify/apply can therefore diverge from delivery-time behavior.
  */
 
 import type { Condition, PredicateLeaf, When } from '../types.ts';
+import { nextUtcMidnightIso, utcMidnightIso } from '../util/dates.ts';
 
 export interface RenderedFilter {
   /** Structured condition for Email/query, or null for match-everything. */
   condition: unknown;
   /** Leaf descriptions the server cannot evaluate (e.g. VIP membership). */
   unsupported: string[];
-}
-
-/** Convert a spec YYYY-MM-DD into local-midnight ISO, as the web client does. */
-function localMidnightIso(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  if (Number.isNaN(d.getTime())) {
-    throw new Error(`Invalid date value: ${date}`);
-  }
-  return d.toISOString();
 }
 
 function renderAddressValue(match: string, value: string): string {
@@ -121,6 +124,8 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
         case 'body':
           return { body: node.value };
         case 'anywhere':
+          // Full-text approximation — see the divergence caveat in the
+          // module header; the installed rule matches address fields only.
           return { text: node.value };
         case 'attachment_name':
           return { hasAttachment: true, attachmentName: node.value };
@@ -186,15 +191,15 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
     case 'date': {
       const conditions: unknown[] = [];
       if (node.equals) {
-        const start = localMidnightIso(node.equals);
-        const end = new Date(new Date(`${node.equals}T00:00:00`).getTime() + 24 * 3600 * 1000).toISOString();
-        conditions.push({ after: start }, { before: end });
+        conditions.push({ after: utcMidnightIso(node.equals) }, { before: nextUtcMidnightIso(node.equals) });
       }
-      if (node.after) conditions.push({ after: localMidnightIso(node.after) });
-      if (node.before) conditions.push({ before: localMidnightIso(node.before) });
+      if (node.after) conditions.push({ after: utcMidnightIso(node.after) });
+      if (node.before) conditions.push({ before: utcMidnightIso(node.before) });
       return conditions.length === 1 ? conditions[0] : { operator: 'AND', conditions };
     }
     case 'raw':
+      // Full-text pass-through. For `with:` values this diverges from the
+      // installed rule's address-fields OR — see the module header caveat.
       return { text: node.value };
     default:
       break;

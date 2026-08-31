@@ -18,14 +18,24 @@
  *                                reject a listId condition
  *   search `to:x`              → OR over to/cc/bcc/deliveredTo
  *
- * Unsupported leaves (VIP / contact-group membership, `raw:` forms beyond
- * `with:`) yield filter: null — such rules still emit with their search
- * string, and `fmrules sync` refuses to destroy the existing set when the
- * incoming file contains them rather than wiping the account and failing
- * mid-import.
+ * Fail-closed: a single unsupported leaf (VIP / contact-group
+ * membership, `raw:` forms beyond `with:`) makes the WHOLE rule emit
+ * `filter: null`. Dropping the leaf and emitting the remaining
+ * conjunction would install a rule broader than the YAML — the negation
+ * or narrowing silently vanishes, and nothing downstream can detect a
+ * non-null-but-partial filter. With `filter: null`, `compile`/`check`
+ * surface the reason as a warning (SPEC(10).md §11.5) and `fmrules
+ * sync` refuses the whole file rather than wiping the account and
+ * failing mid-import.
+ *
+ * Date leaves pin day boundaries to UTC (see util/dates.ts) — the
+ * structured filter is authoritative for Rule/set, so the emitted
+ * timestamps, not Fastmail's date-only search parsing, decide the
+ * boundaries.
  */
 
 import { quote } from './emit.ts';
+import { nextUtcMidnightIso, utcMidnightIso } from '../util/dates.ts';
 import type {
   Condition,
   DateLeaf,
@@ -43,6 +53,11 @@ export interface RenderedRuleFilter {
   unsupported: string | null;
 }
 
+interface RenderOut {
+  /** Unsupported-leaf descriptions collected while rendering. */
+  unsupported: string[];
+}
+
 /** Fastmail parses `with:X` (and spec `to:`) as an OR across address fields. */
 function addressOr(fields: string[], value: string): unknown {
   const conditions = fields.map((f) => ({ [f]: value }));
@@ -50,7 +65,7 @@ function addressOr(fields: string[], value: string): unknown {
   return { operator: 'OR', conditions };
 }
 
-function renderPredicate(leaf: PredicateLeaf): unknown {
+function renderPredicate(leaf: PredicateLeaf, out: RenderOut): unknown {
   switch (leaf.kind) {
     case 'priority':
       return { isHighPriority: true };
@@ -80,36 +95,40 @@ function renderPredicate(leaf: PredicateLeaf): unknown {
     case 'from_in_vips':
     case 'to_in_vips':
     case 'from_in_group':
-    case 'to_in_group':
-      return null; // signaled to the caller as unsupported
+    case 'to_in_group': {
+      const what =
+        leaf.kind === 'from_in_vips'
+          ? 'from_in_vips'
+          : leaf.kind === 'to_in_vips'
+            ? 'to_in_vips'
+            : `${leaf.kind} "${leaf.group}"`;
+      out.unsupported.push(`${what} has no structured-filter form`);
+      return null;
+    }
   }
 }
 
 function renderDate(leaf: DateLeaf): unknown {
   const conditions: unknown[] = [];
-  const midnight = (d: string) => new Date(`${d}T00:00:00`).toISOString();
   if (leaf.equals) {
-    conditions.push(
-      { after: midnight(leaf.equals) },
-      { before: new Date(new Date(`${leaf.equals}T00:00:00`).getTime() + 24 * 3600 * 1000).toISOString() },
-    );
+    conditions.push({ after: utcMidnightIso(leaf.equals) }, { before: nextUtcMidnightIso(leaf.equals) });
   }
-  if (leaf.after) conditions.push({ after: midnight(leaf.after) });
-  if (leaf.before) conditions.push({ before: midnight(leaf.before) });
+  if (leaf.after) conditions.push({ after: utcMidnightIso(leaf.after) });
+  if (leaf.before) conditions.push({ before: utcMidnightIso(leaf.before) });
   return conditions.length === 1 ? conditions[0] : { operator: 'AND', conditions };
 }
 
 /** Minimal raw: parser — `with:VALUE` (the only raw form this repo uses). */
-function renderRaw(leaf: RawLeaf, out: { unsupported: string | null }): unknown {
+function renderRaw(leaf: RawLeaf, out: RenderOut): unknown {
   const m = leaf.value.match(/^with:(\S+)$/);
   // Raw values pass through the search string verbatim — unquoted — so
   // the parsed filter value is bare even when it contains hyphens.
   if (m) return addressOr(['from', 'to', 'cc', 'bcc', 'deliveredTo'], m[1]!);
-  out.unsupported = `raw condition "${leaf.value}" has no structured-filter translation`;
+  out.unsupported.push(`raw condition "${leaf.value}" has no structured-filter translation`);
   return null;
 }
 
-function renderLeaf(node: Condition, out: { unsupported: string | null }): unknown {
+function renderLeaf(node: Condition, out: RenderOut): unknown {
   switch (node.kind) {
     case 'phrase': {
       const leaf = node as PhraseLeaf;
@@ -166,20 +185,24 @@ function renderLeaf(node: Condition, out: { unsupported: string | null }): unkno
     case 'raw':
       return renderRaw(node as RawLeaf, out);
     default:
-      return renderPredicate(node as PredicateLeaf);
+      return renderPredicate(node as PredicateLeaf, out);
   }
 }
 
-function renderNode(node: Condition, out: { unsupported: string | null }): unknown {
+function renderNode(node: Condition, out: RenderOut): unknown {
   switch (node.kind) {
     case 'all': {
-      const children = node.children.map((c) => renderNode(c, out)).filter((c) => c !== null);
+      const children = node.children.map((c) => renderNode(c, out));
+      // Fail-closed: a null child means an unsupported leaf — dropping it
+      // would silently broaden the rule, so the whole group is null.
+      if (children.some((c) => c === null)) return null;
       if (children.length === 0) return null;
       if (children.length === 1) return children[0];
       return { operator: 'AND', conditions: children };
     }
     case 'any': {
-      const children = node.children.map((c) => renderNode(c, out)).filter((c) => c !== null);
+      const children = node.children.map((c) => renderNode(c, out));
+      if (children.some((c) => c === null)) return null;
       if (children.length === 0) return null;
       if (children.length === 1) return children[0];
       return { operator: 'OR', conditions: children };
@@ -205,7 +228,10 @@ export function emitRuleFilter(when: When, resolved: Condition | null): Rendered
     return { filter: null, unsupported: 'when: always has no structured-filter form' };
   }
   if (!resolved) return { filter: null, unsupported: 'no resolved condition' };
-  const out: { unsupported: string | null } = { unsupported: null };
+  const out: RenderOut = { unsupported: [] };
   const filter = renderNode(resolved, out);
-  return { filter, unsupported: filter === null ? (out.unsupported ?? 'condition produced no filter') : null };
+  if (out.unsupported.length > 0) {
+    return { filter: null, unsupported: out.unsupported.join('; ') };
+  }
+  return { filter, unsupported: filter === null ? 'condition produced no filter' : null };
 }

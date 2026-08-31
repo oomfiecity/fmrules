@@ -153,12 +153,12 @@ function renderHeader(leaf: HeaderLeaf): string {
 }
 
 /**
- * Hedge (§8.6): date boundary semantics.
+ * Hedge (§8.6): date boundary semantics in the SEARCH string.
  * Fastmail decides whether `after:YYYY-MM-DD` includes midnight of that
- * date. The spec documents user intent ("on this date or later") but
- * points out that boundary behavior is Fastmail-defined. If we ever
- * want to pin this down (e.g. emit an explicit timestamp), this is
- * where it changes.
+ * date. The structured `filter` (emit-filter.ts) no longer hedges — it
+ * pins day boundaries to explicit UTC-midnight timestamps — but the
+ * search string keeps the date: operator form, so this hedge survives
+ * for the search dialect. The filter is authoritative for Rule/set.
  */
 function emitDateLeaf(leaf: DateLeaf): string {
   const parts: string[] = [];
@@ -330,12 +330,18 @@ function emitActions(actions: Actions): Pick<
 // ────────────────────────────────────────────────────────────────────────────
 // Top-level
 
-export function emitRule(rule: ExpandedRule, nowIso: string): EmittedRule {
+export function emitRule(
+  rule: ExpandedRule,
+  nowIso: string,
+  /** Invoked when the rule emits `filter: null` — sync will refuse the file. */
+  onNoStructuredFilter?: (reason: string) => void,
+): EmittedRule {
   const search = emitSearch(rule.when, rule.resolvedCondition);
   const combinator = deriveCombinator(rule.when, rule.resolvedCondition);
   const actionParts = emitActions(rule.actions);
   const stop = !rule.continueFlag;
-  const { filter: structuredFilter } = emitRuleFilter(rule.when, rule.resolvedCondition);
+  const { filter: structuredFilter, unsupported } = emitRuleFilter(rule.when, rule.resolvedCondition);
+  if (unsupported && onNoStructuredFilter) onNoStructuredFilter(unsupported);
   const out: EmittedRule = {
     name: rule.name,
     // YAML's `enabled` drives Fastmail's isEnabled. Disabled rules never

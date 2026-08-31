@@ -51,7 +51,6 @@ export interface PipelineResult {
   warnings: readonly ReturnType<ErrorCollector['getWarnings']>[number][];
   emittedCount: number;
   files: readonly RuleFile[];
-  orphanedSnippets: string[];
   /**
    * Post-expansion rules in evaluation order (§10.4). Populated from phase
    * 4 onward — available even when errors short-circuit later phases, so
@@ -64,11 +63,9 @@ function warnOrphanedSnippets(
   snippets: Map<string, SnippetFile>,
   referencedSnippetPaths: Set<string>,
   errors: ErrorCollector,
-): string[] {
-  const orphaned: string[] = [];
+): void {
   for (const path of snippets.keys()) {
     if (!referencedSnippetPaths.has(path)) {
-      orphaned.push(path);
       errors.warn({
         file: path,
         tag: '12.8',
@@ -76,7 +73,6 @@ function warnOrphanedSnippets(
       });
     }
   }
-  return orphaned;
 }
 
 function collectExtendsPaths(node: unknown, out: Set<string>): void {
@@ -140,7 +136,7 @@ export async function runPipeline(
       }
     }
   }
-  const orphaned = warnOrphanedSnippets(snippetMap, referencedSnippets, errors);
+  warnOrphanedSnippets(snippetMap, referencedSnippets, errors);
 
   // Which rules actually compile forward? Only enabled rules from files
   // listed in manifest.order — in the order they appear.
@@ -180,7 +176,15 @@ export async function runPipeline(
   // total count. But we only write to disk when there are zero errors and
   // this is not checkOnly / dryRun.
   const nowIso = new Date().toISOString();
-  const emitted: EmittedRule[] = expanded.map((r) => emitRule(r, nowIso));
+  const emitted: EmittedRule[] = expanded.map((r) =>
+    emitRule(r, nowIso, (reason) =>
+      errors.warn({
+        file: r.source.sourceFile,
+        tag: '11.5',
+        message: `rule "${r.name}" emits no structured filter (${reason}) — \`fmrules sync\` will refuse the compiled file.`,
+      }),
+    ),
+  );
 
   let finalEmitted = emitted;
   let lockfileOut: LockfileMap = {};
@@ -203,7 +207,6 @@ export async function runPipeline(
       warnings: errors.getWarnings(),
       emittedCount: finalEmitted.length,
       files: ruleFiles,
-      orphanedSnippets: orphaned,
       expandedRules: expandedRulesOut,
     };
   }
@@ -214,7 +217,6 @@ export async function runPipeline(
       warnings: errors.getWarnings(),
       emittedCount: finalEmitted.length,
       files: ruleFiles,
-      orphanedSnippets: orphaned,
       expandedRules: expandedRulesOut,
     };
   }
@@ -227,7 +229,6 @@ export async function runPipeline(
       warnings: errors.getWarnings(),
       emittedCount: finalEmitted.length,
       files: ruleFiles,
-      orphanedSnippets: orphaned,
       expandedRules: expandedRulesOut,
     };
   }
@@ -244,7 +245,6 @@ export async function runPipeline(
     warnings: errors.getWarnings(),
     emittedCount: finalEmitted.length,
     files: ruleFiles,
-    orphanedSnippets: orphaned,
     expandedRules: expandedRulesOut,
   };
 }
