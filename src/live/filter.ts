@@ -174,10 +174,11 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
       break;
     }
     case 'list_id': {
-      // The server rejects a `listId` filter condition outright (observed
-      // live), so anchor on the List-Id header instead. Angle brackets
-      // make the substring match exact for practical purposes — List-Id
-      // values are conventionally "<bare>" with nothing else.
+      // Live-probed 2026-08-31: a `listId` Email/query condition is NOT
+      // rejected — it silently matches nothing. Anchor on the List-Id
+      // header instead; angle brackets make the substring match exact
+      // for practical purposes — List-Id values are conventionally
+      // "<bare>" with nothing else.
       const bare = node.value.replace(/^<+/, '').replace(/>+$/, '');
       return { header: ['List-Id', `<${bare}>`] };
     }
@@ -218,8 +219,13 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
       return conditions.length === 1 ? conditions[0] : { operator: 'AND', conditions };
     }
     case 'raw':
-      // Full-text pass-through. For `with:` values this diverges from the
-      // installed rule's address-fields OR — see the module header caveat.
+      // Full-text pass-through. Live-probed 2026-08-31: Email/query
+      // re-parses operators embedded in text values ({text: 'with:x'}
+      // behaves as the with: operator, not a literal), so raw `with:`
+      // values get with:-treatment — closer to the installed rule than a
+      // plain full-text read. `anywhere:` phrases remain the approximate
+      // case (full-text vs the rule's address-fields OR — see the module
+      // header caveat).
       return { text: node.value };
     default:
       break;

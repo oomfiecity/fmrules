@@ -3,20 +3,37 @@
  * `filter` that Fastmail stores server-side and that `Rule/set` create
  * requires ("Need at least one of 'filter' or 'conditions'").
  *
- * Mirrors the server's own parse of the emitted search string, verified
- * against live Rule/get output (2026-08-31):
+ * Mirrors the server's own parse of the emitted search string. Probed
+ * live 2026-08-31; note the evidence class — most probes below are
+ * round-trips of this tool's OWN rules (Rule/get echoes what Rule/set
+ * wrote), so they prove storage, not delivery-time matching:
  *
- *   search `from:x`            → {from: "x"}
+ *   search `from:x`            → {from: "x"} (whole header incl. display
+ *                                name — live-verified: from "Boost" matches
+ *                                display-name-only senders)
  *   search `tonotcc:x`         → {to: "x"}
- *   search `with:x`            → OR over from/to/cc/bcc/deliveredTo
- *                                (NOT a text match — this is how the
- *                                server parses the `with:` operator,
- *                                including `raw: with:via`)
+ *   search `with:x`            → OR over from/to/cc/bcc/deliveredTo.
+ *                                UNVERIFIED against delivery behavior —
+ *                                the query-side counterpart renders the
+ *                                same leaves as full-text (see the
+ *                                divergence caveat in live/filter.ts);
+ *                                Email/query re-parses with: inside text
+ *                                terms, so verify/apply is not decisive
+ *                                evidence for the rule grammar either.
+ *                                If a with:-rule is ever observed to
+ *                                misfire at delivery, this is the spot.
+ *   quoted values ("two words") → matched identically to unquoted
+ *                                (live-verified: quoted and unquoted
+ *                                subject filters return equal counts)
  *   search `header:"N:V"`      → {header: ["N", "V"]}
- *   search `list:<bare>`       → {listId: bare} — valid in the rule
- *                                grammar even though Email/query filters
- *                                reject a listId condition
+ *   search `list:<bare>`       → {listId: bare} — accepted by Rule/set
+ *                                (creation live-verified via sync);
+ *                                Email/query's listId condition silently
+ *                                matches nothing
  *   search `to:x`              → OR over to/cc/bcc/deliveredTo
+ *
+ * Date bounds are inclusive at the boundary instant (live-verified:
+ * after: <exact receivedAt> includes the message; +1s excludes it).
  *
  * Fail-closed: a single unsupported leaf (VIP / contact-group
  * membership, `raw:` forms beyond `with:`) makes the WHOLE rule emit

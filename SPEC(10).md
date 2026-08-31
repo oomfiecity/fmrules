@@ -860,13 +860,16 @@ one of the three match-type keys is required.
 `filter` emitted alongside the search string (§11.5) carries explicit
 ISO timestamps: `after: "2025-01-01"` becomes the instant
 `2025-01-01T00:00:00Z`, and `equals: "2025-06-15"` becomes the UTC day
-window `[2025-06-15T00:00:00Z, 2025-06-16T00:00:00Z)`. Day boundaries are
-therefore UTC-defined and deterministic across compiling machines — not
-left to Fastmail's date-only search parsing or the compiler's local
-timezone. (The emitted search string keeps Fastmail's `date:`/`after:`/
-`before:` operators, whose own boundary parsing remains Fastmail-defined;
-the structured filter is authoritative for rule evaluation.) Authors in
-non-UTC zones should note that a "day" is a UTC day.
+window `[2025-06-15T00:00:00Z, 2025-06-16T00:00:00Z)`. The bounds are
+inclusive at the boundary instant (live-verified 2026-08-31: an `after:`
+filter at a message's exact receivedAt includes it; one second later
+excludes it). Day boundaries are therefore UTC-defined and deterministic
+across compiling machines — not left to Fastmail's date-only search
+parsing or the compiler's local timezone. (The emitted search string
+keeps Fastmail's `date:`/`after:`/`before:` operators, whose own boundary
+parsing remains Fastmail-defined; the structured filter is authoritative
+for rule evaluation.) Authors in non-UTC zones should note that a "day"
+is a UTC day.
 
 The one deliberate consequence: because the filter pins UTC and UTC has no
 DST transitions, the `equals:` window is always exactly 24h. This
