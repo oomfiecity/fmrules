@@ -143,9 +143,13 @@ export async function evaluateRules(ctx: Context, opts: LiveEngineOptions): Prom
 }
 
 /**
- * Compute whole-map Email/set updates for a rule's actions over a batch of
- * messages. Returns the update map plus the ids it covers; label/spam/
- * trash target ids come from the account's mailbox list.
+ * Compute PatchObject updates (RFC 8620 slash-path form — the same form
+ * Fastmail's web client uses) for a rule's actions over a batch of
+ * messages. Patch form is essential: whole-map `mailboxIds`/`keywords`
+ * replacement is both lossy (unmentioned keywords drop — the canary
+ * proved it) and forbidden for server-managed keywords like
+ * $maskedemail on Apple hide-my-email messages. Patches touch only the
+ * keys each action needs and never the rest.
  */
 export function computeUpdates(
   actions: Actions,
@@ -169,45 +173,44 @@ export function computeUpdates(
   for (const id of ids) {
     const state = current.get(id);
     if (!state) continue;
-    const mailboxIdsNext = { ...state.mailboxIds };
-    const keywordsNext = { ...state.keywords };
-    let changed = false;
+    const patch: Record<string, unknown> = {};
 
     if (actions.add_label?.[0] && mailboxIds.label) {
-      if (!mailboxIdsNext[mailboxIds.label]) {
-        mailboxIdsNext[mailboxIds.label] = true;
-        changed = true;
+      if (!state.mailboxIds[mailboxIds.label]) {
+        patch[`mailboxIds/${mailboxIds.label}`] = true;
       }
     }
-    if (actions.mark_read && !keywordsNext['$seen']) {
-      keywordsNext['$seen'] = true;
-      changed = true;
+    if (actions.mark_read && !state.keywords['$seen']) {
+      patch['keywords/$seen'] = true;
     }
-    if (actions.pin && !keywordsNext['$flagged']) {
-      keywordsNext['$flagged'] = true;
-      changed = true;
+    if (actions.pin && !state.keywords['$flagged']) {
+      patch['keywords/$flagged'] = true;
     }
-    if (actions.archive && mailboxIdsNext[mailboxIds.scope]) {
-      delete mailboxIdsNext[mailboxIds.scope];
-      changed = true;
+    if (actions.archive && state.mailboxIds[mailboxIds.scope]) {
+      patch[`mailboxIds/${mailboxIds.scope}`] = null;
     }
+    // Moves to junk/trash: null every current mailbox, add the target.
+    // Only when not already there (an already-spammed message would
+    // otherwise re-move and count as changed forever).
     if (actions.send_to_spam) {
-      // Whole-map replacement: a message in the junk mailbox is in junk.
-      for (const key of Object.keys(mailboxIdsNext)) delete mailboxIdsNext[key];
-      mailboxIdsNext[mailboxIds.junk] = true;
-      changed = true;
+      const inJunkOnly =
+        Object.keys(state.mailboxIds).length === 1 && state.mailboxIds[mailboxIds.junk] === true;
+      if (!inJunkOnly) {
+        for (const mb of Object.keys(state.mailboxIds)) patch[`mailboxIds/${mb}`] = null;
+        patch[`mailboxIds/${mailboxIds.junk}`] = true;
+      }
     }
     if (actions.delete_to_trash) {
-      for (const key of Object.keys(mailboxIdsNext)) delete mailboxIdsNext[key];
-      mailboxIdsNext[mailboxIds.trash] = true;
-      changed = true;
+      const inTrashOnly =
+        Object.keys(state.mailboxIds).length === 1 && state.mailboxIds[mailboxIds.trash] === true;
+      if (!inTrashOnly) {
+        for (const mb of Object.keys(state.mailboxIds)) patch[`mailboxIds/${mb}`] = null;
+        patch[`mailboxIds/${mailboxIds.trash}`] = true;
+      }
     }
 
-    if (changed) {
-      updates[id] = {
-        mailboxIds: mailboxIdsNext,
-        keywords: keywordsNext,
-      };
+    if (Object.keys(patch).length > 0) {
+      updates[id] = patch;
     }
   }
   return updates;

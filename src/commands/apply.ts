@@ -124,12 +124,20 @@ const handler: CommandModule['handler'] = async (argv) => {
 
       await session.updateEmails(updates);
       mutated += Object.keys(updates).length;
-      // Refresh cached state so later rules see the mutations.
+      // Apply the patch to the cached state so later rules see the mutations.
       for (const [id, u] of Object.entries(updates)) {
-        state.set(id, {
-          mailboxIds: (u.mailboxIds as Record<string, boolean>) ?? state.get(id)!.mailboxIds,
-          keywords: (u.keywords as Record<string, boolean>) ?? state.get(id)!.keywords,
-        });
+        const cached = state.get(id)!;
+        for (const [key, val] of Object.entries(u)) {
+          if (key.startsWith('mailboxIds/')) {
+            const mb = key.slice('mailboxIds/'.length);
+            if (val === null) delete cached.mailboxIds[mb];
+            else cached.mailboxIds[mb] = true;
+          } else if (key.startsWith('keywords/')) {
+            const kw = key.slice('keywords/'.length);
+            if (val === null) delete cached.keywords[kw];
+            else cached.keywords[kw] = true;
+          }
+        }
       }
     }
 

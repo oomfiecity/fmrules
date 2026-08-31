@@ -203,9 +203,11 @@ export class JmapSession {
   }
 
   /**
-   * Apply Email/set updates. Note Fastmail's replacement semantics:
-   * `mailboxIds` and `keywords` updates REPLACE the whole map, so callers
-   * must compute complete desired maps (not patches).
+   * Apply Email/set updates in RFC 8620 PatchObject form (slash-path keys
+   * like `mailboxIds/<id>` / `keywords/$seen`), which is how Fastmail's own
+   * web client mutates messages. Whole-map `mailboxIds`/`keywords` values
+   * REPLACE the entire map — lossy for unmentioned keywords and forbidden
+   * for server-managed ones ($maskedemail) — so callers must emit patches.
    */
   async updateEmails(updates: Record<string, Record<string, unknown>>): Promise<void> {
     const entries = Object.entries(updates);
