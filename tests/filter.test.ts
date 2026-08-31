@@ -84,8 +84,18 @@ describe('renderFilter — phrases', () => {
     expect(renderFilter(...leaf({ kind: 'phrase', field: 'body', match: 'contains', value: 'y' })).condition).toEqual({ body: 'y' });
   });
 
-  test('anywhere → {text}', () => {
-    expect(renderFilter(...leaf({ kind: 'phrase', field: 'anywhere', match: 'contains', value: 'z' })).condition).toEqual({ text: 'z' });
+  test('anywhere → six-field OR (mirrors compile-side emission, SPEC §8)', () => {
+    expect(renderFilter(...leaf({ kind: 'phrase', field: 'anywhere', match: 'contains', value: 'z' })).condition).toEqual({
+      operator: 'OR',
+      conditions: [
+        { from: 'z' },
+        { to: 'z' },
+        { cc: 'z' },
+        { bcc: 'z' },
+        { subject: 'z' },
+        { body: 'z' },
+      ],
+    });
   });
 
   test('attachment_name → hasAttachment + attachmentName', () => {

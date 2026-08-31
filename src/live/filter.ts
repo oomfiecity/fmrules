@@ -23,7 +23,9 @@
  *                        promises (mirrors emit.ts/emit-filter.ts)
  *   spec `to_only`     → {to}                       (search tonotcc:)
  *   spec `delivered_to`→ {deliveredTo}              (search deliveredto:)
- *   spec `anywhere`    → {text}                     (search with:)
+ *   spec `anywhere`    → six-field OR (from/to/cc/bcc/subject/body —
+ *                        SPEC §8's definition; mirrors the compile-side
+ *                        emission, live components individually verified)
  *   spec `attachment_name` → {hasAttachment, attachmentName}
  *   spec `list_id`     → {header: [List-Id, <value>]} (exact via bracket anchor)
  *   spec `size`        → {minSize}/{maxSize}
@@ -34,10 +36,12 @@
  *                        emitter pins via util/dates.ts, so verify/apply
  *                        evaluate the same windows the installed rules
  *                        use)
- *   spec `raw`         → {text} (passed through verbatim; the compiler's
- *                        stripped-operator scan (§8.7) has already refused
- *                        operators Fastmail's rule engine drops, so
- *                        anything that compiles is at least search-valid)
+ *   spec `raw`         → {text} (passed through verbatim — the same
+ *                        string the rule's filter stores, so Fastmail's
+ *                        own parser gives it the same semantics; the
+ *                        compiler's stripped-operator scan (§8.7) has
+ *                        already refused operators Fastmail's rule
+ *                        engine drops)
  *
  * Two predicate families cannot be expressed server-side and are reported
  * as unsupported so callers can warn: VIP membership and contact-group
@@ -48,14 +52,14 @@
  * `msg_replied` match against CURRENT message state (§ "On rule execution
  * context"), which is not necessarily the state at delivery time.
  *
- * Divergence caveat — `anywhere` and `raw: with:`: the compile-side
- * filter emitter (src/compile/emit-filter.ts) models `with:` as an OR
- * across address fields (from/to/cc/bcc/deliveredTo), verified against
- * live Rule/get output — that is what the INSTALLED delivery-time rule
- * matches. Email/query has no equivalent address-fields condition
- * exposed here, so this renderer approximates those leaves as a
- * full-text `{text}` match. Counts for `anywhere`/`with:` rules from
- * verify/apply can therefore diverge from delivery-time behavior.
+ * Renderer alignment (2026-08-31): this query-side renderer and the
+ * compile-side rule emitter (src/compile/emit-filter.ts) now produce
+ * the same condition shapes for every leaf — `anywhere` is the
+ * spec-exact six-field OR on both sides, `raw:` is verbatim on both
+ * sides — so verify/apply evaluate the same match the installed rule
+ * does. The former `with:`-based divergence is gone: live probing
+ * showed `with:` is not a usable Fastmail operator (see the emit-filter
+ * module header for the probe results).
  */
 
 import type { Condition, PredicateLeaf, When } from '../types.ts';
@@ -133,9 +137,25 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
         case 'body':
           return { body: node.value };
         case 'anywhere':
-          // Full-text approximation — see the divergence caveat in the
-          // module header; the installed rule matches address fields only.
-          return { text: node.value };
+          // SPEC §8: anywhere = From, To, Cc, Bcc, Subject, or Body —
+          // the exact six-field OR, mirroring the compile-side emission
+          // so verify/apply evaluate the same match the installed rule
+          // does. (A previous version used {text} here — full-text,
+          // verified — while the compile side invented a with: address
+          // form; the two renderers disagreed. Both now emit the
+          // spec-exact six-field OR; every condition type in it is
+          // individually verified.)
+          return {
+            operator: 'OR',
+            conditions: [
+              { from: node.value },
+              { to: node.value },
+              { cc: node.value },
+              { bcc: node.value },
+              { subject: node.value },
+              { body: node.value },
+            ],
+          };
         case 'attachment_name':
           return { hasAttachment: true, attachmentName: node.value };
       }
@@ -219,13 +239,9 @@ function renderLeaf(node: Condition, out: RenderedFilter): unknown {
       return conditions.length === 1 ? conditions[0] : { operator: 'AND', conditions };
     }
     case 'raw':
-      // Full-text pass-through. Live-probed 2026-08-31: Email/query
-      // re-parses operators embedded in text values ({text: 'with:x'}
-      // behaves as the with: operator, not a literal), so raw `with:`
-      // values get with:-treatment — closer to the installed rule than a
-      // plain full-text read. `anywhere:` phrases remain the approximate
-      // case (full-text vs the rule's address-fields OR — see the module
-      // header caveat).
+      // Verbatim pass-through as the text condition — the same string the
+      // compile side stores in the rule filter, so verify/apply evaluate
+      // the same query Fastmail's own parser gives it (operators and all).
       return { text: node.value };
     default:
       break;

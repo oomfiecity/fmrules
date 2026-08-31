@@ -143,7 +143,7 @@ const handler: CommandModule['handler'] = async (argv) => {
     if (filterless.length > 0) {
       ctx.log.error(
         `${filterless.length} rule(s) have no structured filter — they use condition form(s) with no ` +
-          'structured equivalent (`when: always`, VIP/contact-group membership, or `raw:` forms beyond `with:`) ' +
+          'structured equivalent (`when: always` or VIP/contact-group membership) ' +
           'and cannot be JMAP-imported: ' +
           `${filterless.slice(0, 3).map((r) => r.name).join(', ')}` +
           (filterless.length > 3 ? '…' : ''),

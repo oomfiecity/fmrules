@@ -43,7 +43,7 @@ Every `.yml` file under `rules/` must be listed in `manifest.yml`'s `order` (and
 
 Replaces all Fastmail rules with a compiled `mailrules.json`, driven by JMAP (`Rule/set`) through an authenticated browser session — the same mechanism Fastmail's web client uses, replacing the earlier settings-UI automation, which was flaky (SPA re-render races, select-all races, reload stalls).
 
-Safety ordering: labels the rules file into are created first (Fastmail's rule engine never creates them — a rule firing into a missing label silently loses the label); the file is shape-checked and every incoming rule validated to carry a structured `filter` (compile output from fmrules ≥ 4.1.2) *before* the existing set is destroyed, so a malformed or filterless file never wipes the account; the created count is verified against the server's confirmation. A compiled file containing `filter: null` rules — `when: always`, VIP/contact-group membership, non-`with:` `raw:` — is refused by sync; `compile`/`check` warn when emitting such rules. Server-side create rejections (a condition Fastmail refuses, an overlong name) can still abort after the destroy step — the account's rules are always reproducible from YAML, so recompile and re-sync recovers.
+Safety ordering: labels the rules file into are created first (Fastmail's rule engine never creates them — a rule firing into a missing label silently loses the label); the file is shape-checked and every incoming rule validated to carry a structured `filter` (compile output from fmrules ≥ 4.1.2) *before* the existing set is destroyed, so a malformed or filterless file never wipes the account; the created count is verified against the server's confirmation. A compiled file containing `filter: null` rules — `when: always` or VIP/contact-group membership — is refused by sync; `compile`/`check` warn when emitting such rules. Server-side create rejections (a condition Fastmail refuses, an overlong name) can still abort after the destroy step — the account's rules are always reproducible from YAML, so recompile and re-sync recovers.
 
 ### One-time setup
 
@@ -116,16 +116,12 @@ fmrules verify --mailbox Archive --after 2026-01-01
 
 Matching is delegated to the server via structured JMAP `Email/query`
 filters, so semantics (stemming, header substring matching, address
-handling) are Fastmail's own rather than a reimplementation. Three caveats:
+handling) are Fastmail's own rather than a reimplementation. Two caveats:
 
 - Delivery-time predicates (`conv_followed`, `msg_pinned`, …) match against
   *current* message state, which is not necessarily the state at delivery.
 - VIP and contact-group membership have no server-side filter equivalent;
   rules using them are reported as not server-evaluable.
-- `anywhere:` phrases and `raw: with:` values are approximated as a
-  full-text query here, while the installed delivery-time rule matches
-  address fields only (from/to/cc/bcc/deliveredTo) — counts for these
-  rules can diverge from delivery-time behavior.
 
 ## `fmrules apply`
 

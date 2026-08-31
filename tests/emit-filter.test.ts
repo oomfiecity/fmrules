@@ -63,26 +63,26 @@ describe('emitRuleFilter — supported leaves', () => {
     });
   });
 
-  test('anywhere phrase → OR over address fields (rule-grammar `with:` parse)', () => {
+  test('anywhere phrase → six-field OR per SPEC §8 (no with: operator)', () => {
     const out = emitRuleFilter(...leaf({ kind: 'phrase', field: 'anywhere', match: 'contains', value: 'ebay' }));
     expect(out.filter).toEqual({
       operator: 'OR',
-      conditions: [{ from: 'ebay' }, { to: 'ebay' }, { cc: 'ebay' }, { bcc: 'ebay' }, { deliveredTo: 'ebay' }],
+      conditions: [
+        { from: 'ebay' },
+        { to: 'ebay' },
+        { cc: 'ebay' },
+        { bcc: 'ebay' },
+        { subject: 'ebay' },
+        { body: 'ebay' },
+      ],
     });
   });
 
-  test('raw with: → OR over address fields, bare value', () => {
+  test('raw passes through verbatim as the text condition', () => {
     const out = emitRuleFilter(...leaf({ kind: 'raw', value: 'with:via' }));
-    expect(out.filter).toEqual({
-      operator: 'OR',
-      conditions: [{ from: 'via' }, { to: 'via' }, { cc: 'via' }, { bcc: 'via' }, { deliveredTo: 'via' }],
-    });
-  });
-
-  test('raw beyond with: → filter null with reason', () => {
-    const out = emitRuleFilter(...leaf({ kind: 'raw', value: 'list:my-list' }));
-    expect(out.filter).toBeNull();
-    expect(out.unsupported).toContain('raw condition "list:my-list"');
+    expect(out).toEqual({ filter: { text: 'with:via' }, unsupported: null });
+    const listForm = emitRuleFilter(...leaf({ kind: 'raw', value: 'list:my-list' }));
+    expect(listForm).toEqual({ filter: { text: 'list:my-list' }, unsupported: null });
   });
 
   test('header forms → [name] / [name, value]', () => {

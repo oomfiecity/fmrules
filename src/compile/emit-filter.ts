@@ -12,16 +12,7 @@
  *                                name — live-verified: from "Boost" matches
  *                                display-name-only senders)
  *   search `tonotcc:x`         → {to: "x"}
- *   search `with:x`            → OR over from/to/cc/bcc/deliveredTo.
- *                                UNVERIFIED against delivery behavior —
- *                                the query-side counterpart renders the
- *                                same leaves as full-text (see the
- *                                divergence caveat in live/filter.ts);
- *                                Email/query re-parses with: inside text
- *                                terms, so verify/apply is not decisive
- *                                evidence for the rule grammar either.
- *                                If a with:-rule is ever observed to
- *                                misfire at delivery, this is the spot.
+ *   anywhere / raw             → see below (with: is NOT a usable operator)
  *   quoted values ("two words") → matched identically to unquoted
  *                                (live-verified: quoted and unquoted
  *                                subject filters return equal counts)
@@ -35,15 +26,30 @@
  * Date bounds are inclusive at the boundary instant (live-verified:
  * after: <exact receivedAt> includes the message; +1s excludes it).
  *
+ * `anywhere` and `raw:`:
+ *
+ *   - anywhere (SPEC §8: From, To, Cc, Bcc, Subject, or Body) renders as
+ *     the exact six-field OR in both encodings. A previous version used
+ *     the `with:` operator here on the claim that it covered address
+ *     fields — live probing disproved that: with:tok inside a filter
+ *     text value matches a narrow, undocumented set (with:telstra → 7
+ *     messages, none of them among the 97 address-field matches), not
+ *     the address fields and not full-text.
+ *   - raw: passes through verbatim as the rule's {text} condition — the
+ *     same string the search dialect stores, so both encodings of the
+ *     rule mean the same query and Fastmail's own parser decides the
+ *     semantics (SPEC §8.7). Rule/set accepts {text} filters verbatim
+ *     (live-probed). No invented translation.
+ *
  * Fail-closed: a single unsupported leaf (VIP / contact-group
- * membership, `raw:` forms beyond `with:`) makes the WHOLE rule emit
- * `filter: null`. Dropping the leaf and emitting the remaining
- * conjunction would install a rule broader than the YAML — the negation
- * or narrowing silently vanishes, and nothing downstream can detect a
- * non-null-but-partial filter. With `filter: null`, `compile`/`check`
- * surface the reason as a warning (SPEC(10).md §11.5) and `fmrules
- * sync` refuses the whole file rather than wiping the account and
- * failing mid-import.
+ * membership) makes the WHOLE rule emit `filter: null`. Dropping the
+ * leaf and emitting the remaining conjunction would install a rule
+ * broader than the YAML — the negation or narrowing silently vanishes,
+ * and nothing downstream can detect a non-null-but-partial filter.
+ * With `filter: null`, `compile`/`check` surface the reason as a warning
+ * (SPEC(10).md §11.5) and `fmrules sync` refuses the whole file rather
+ * than wiping the account and failing mid-import. (`raw:` no longer
+ * produces unsupported leaves — it passes through verbatim as {text}.)
  *
  * Date leaves pin day boundaries to UTC (see util/dates.ts) — the
  * structured filter is authoritative for Rule/set, so the emitted
@@ -75,9 +81,8 @@ interface RenderOut {
   unsupported: string[];
 }
 
-/** Fastmail parses `with:X` (and spec `to:`) as an OR across address fields. */
-function addressOr(fields: string[], value: string): unknown {
-  const conditions = fields.map((f) => ({ [f]: value }));
+/** Collapse single-condition ORs; otherwise build the OR group. */
+function orOver(conditions: Record<string, string>[]): unknown {
   if (conditions.length === 1) return conditions[0];
   return { operator: 'OR', conditions };
 }
@@ -155,14 +160,18 @@ function renderDate(leaf: DateLeaf): unknown {
   return conditions.length === 1 ? conditions[0] : { operator: 'AND', conditions };
 }
 
-/** Minimal raw: parser — `with:VALUE` (the only raw form this repo uses). */
-function renderRaw(leaf: RawLeaf, out: RenderOut): unknown {
-  const m = leaf.value.match(/^with:(\S+)$/);
-  // Raw values pass through the search string verbatim — unquoted — so
-  // the parsed filter value is bare even when it contains hyphens.
-  if (m) return addressOr(['from', 'to', 'cc', 'bcc', 'deliveredTo'], m[1]!);
-  out.unsupported.push(`raw condition "${leaf.value}" has no structured-filter translation`);
-  return null;
+/**
+ * raw: passes through verbatim as the rule's text condition — exactly
+ * the string the search dialect stores, so both encodings of the rule
+ * mean the same query and the server's own parser decides the semantics
+ * (SPEC §8.7: "takes a literal Fastmail search query as a string").
+ * Verified storable: Rule/set accepts and stores {text} filters verbatim
+ * (live-probed 2026-08-31). No invented translation — e.g. the old
+ * `with:x` → address-fields OR rewrote the author's query into a
+ * different one.
+ */
+function renderRaw(leaf: RawLeaf): unknown {
+  return { text: leaf.value };
 }
 
 function renderLeaf(node: Condition, out: RenderOut): unknown {
@@ -175,8 +184,15 @@ function renderLeaf(node: Condition, out: RenderOut): unknown {
         case 'body':
           return { body: quote(leaf.value) };
         case 'anywhere':
-          // Fastmail's `with:` operator covers the address fields only.
-          return addressOr(['from', 'to', 'cc', 'bcc', 'deliveredTo'], quote(leaf.value));
+          // SPEC §8: anywhere = From, To, Cc, Bcc, Subject, or Body — the
+          // exact six-field OR (mirrors the search string's six-arm form).
+          // The previous `with:` rendering relied on an operator that
+          // live probing showed does not exist as documented: with:tok
+          // inside a text value matched a narrow undocumented set, not
+          // the address fields, not full-text.
+          return orOver(
+            ['from', 'to', 'cc', 'bcc', 'subject', 'body'].map((f) => ({ [f]: quote(leaf.value) })),
+          );
         case 'attachment_name':
           return { hasAttachment: true, attachmentName: quote(leaf.value) };
       }
@@ -215,7 +231,7 @@ function renderLeaf(node: Condition, out: RenderOut): unknown {
     case 'date':
       return renderDate(node as DateLeaf);
     case 'raw':
-      return renderRaw(node as RawLeaf, out);
+      return renderRaw(node as RawLeaf);
     default:
       return renderPredicate(node as PredicateLeaf, out);
   }

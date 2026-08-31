@@ -630,6 +630,16 @@ bodies, quoted replies, and forwarded content are Fastmail's
 responsibility and not defined here. Test against a real account if
 body-matching edge cases affect a rule's correctness.
 
+**`anywhere` emission.** `anywhere` compiles to the exact six-field OR
+(From, To, Cc, Bcc, Subject, Body) in both the search string and the
+structured filter — every condition type in the OR is individually
+server-verified. Authors should not reach for `with:` via `raw:`
+instead: `with:` is not a documented Fastmail operator, and live probing
+(2026-08-31) showed it does not behave as either the anywhere match or
+an address-field match — `with:telstra` matched 7 messages, none of
+them among the 97 address-field matches for the same token. Use
+`from:`/`to:`/`header:` for anything `with:` was assumed to cover.
+
 ```yaml
 - subject: { contains: urgent }       # matches "urgent", "urgently", etc.
 - subject: { equals: "Urgent" }       # exact match
@@ -1673,13 +1683,16 @@ API if the representation changes in a future version.
 structured `filter` alongside the search string — the form Fastmail's
 own web client stores and `Rule/set` create requires. Rules whose
 conditions have no verified structured form emit `filter: null`:
-`when: always`, VIP or contact-group membership, and `raw:` forms beyond
-`with:`. A rule whose condition *mixes* supported and unsupported leaves
-also emits `filter: null` — dropping just the unsupported leaf would
-install a rule broader (or narrower, under `any:`) than the YAML, so the
-whole rule is refused. `fmrules compile`/`check` warn when emitting such
-rules, and `fmrules sync` refuses a file containing them rather than
-wiping the account and failing mid-import.
+`when: always` and VIP or contact-group membership. (`raw:` always
+translates — it passes through verbatim as the rule's text condition,
+the same string the search dialect stores, so both encodings of the
+rule mean the same query and Fastmail's own parser decides the
+semantics.) A rule whose condition *mixes* supported and unsupported
+leaves also emits `filter: null` — dropping just the unsupported leaf
+would install a rule broader (or narrower, under `any:`) than the
+YAML, so the whole rule is refused. `fmrules compile`/`check` warn when
+emitting such rules, and `fmrules sync` refuses a file containing them
+rather than wiping the account and failing mid-import.
 
 **`domain_or_subdomain` rendering.** Fastmail's `from:@example.com`
 matches senders at exactly `example.com` — *not* its subdomains

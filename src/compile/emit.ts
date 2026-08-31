@@ -76,7 +76,19 @@ function renderAddress(leaf: AddressLeaf): string {
 }
 
 function renderPhrase(leaf: PhraseLeaf): string {
-  const op = leaf.field === 'anywhere' ? 'with' : leaf.field === 'attachment_name' ? 'filename' : leaf.field;
+  if (leaf.field === 'anywhere') {
+    // SPEC §8: anywhere = From, To, Cc, Bcc, Subject, or Body — rendered
+    // as the exact six-field OR. (The old `with:<value>` rendering relied
+    // on a `with:` operator that live probing 2026-08-31 showed does not
+    // behave as any documented form: with:telstra matched 7 messages,
+    // none of them the 97 address-field matches, i.e. an undocumented
+    // narrow semantics — not the anywhere match, and not the address
+    // OR the emit-filter comment claimed.)
+    const v = quote(leaf.value);
+    const arms = ['from', 'to', 'cc', 'bcc', 'subject', 'body'].map((f) => `${f}:${v}`);
+    return `(${arms.join(' OR ')})`;
+  }
+  const op = leaf.field === 'attachment_name' ? 'filename' : leaf.field;
   return renderField(op, leaf.value);
 }
 
