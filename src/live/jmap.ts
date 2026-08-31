@@ -8,9 +8,10 @@
  * the web app's own traffic, and issues JMAP requests from within the page
  * so cookies ride along.
  *
- * Used by the `verify` and `apply` commands (SPEC(10).md §11.3: retroactive
- * rule application as an external JMAP operation — "fetch matching messages
- * and apply actions directly").
+ * Used by the `verify`, `apply` and `sync` commands. The former two are
+ * the out-of-band retroactive-application tool SPEC(10).md §2 anticipated
+ * ("fetching matching messages and applying actions directly"), operating
+ * per the model in §3 "On rule execution context".
  */
 
 import { launch } from '../sync/browser.ts';
@@ -73,7 +74,6 @@ export interface JmapRule {
   id: string;
   name: string;
   isEnabled?: boolean;
-  isDisabled?: boolean;
   [key: string]: unknown;
 }
 
@@ -160,7 +160,10 @@ export class JmapSession {
       await session.request([['Core/echo', { hello: 'fmrules' }, 'c0']]);
       return session;
     } catch (err) {
-      if (!session) await browser.close();
+      // The session hands ownership of the browser to its caller only on
+      // success; on any failure (including a sanity-check throw after
+      // the session was constructed) nothing else will close it.
+      await browser.close();
       throw err;
     }
   }

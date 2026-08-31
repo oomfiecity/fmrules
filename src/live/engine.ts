@@ -2,7 +2,7 @@
  * Live rule evaluation engine — shared by `fmrules verify` (report only)
  * and `fmrules apply` (retroactively apply actions via JMAP).
  *
- * Model (SPEC(10).md "On rule execution context" + §11.3):
+ * Model (SPEC(10).md "On rule execution context"):
  *   - Rules evaluate in manifest order, exactly as they would at delivery.
  *   - A matching rule contributes its actions; when its Fastmail `stop`
  *     flag is set (YAML `continue: false`), the message is not offered to
@@ -11,9 +11,11 @@
  *     Email/query filters (see filter.ts), so semantics — stemming, header
  *     substring matching, address handling — are the server's own.
  *
- * Mutations use whole-map replacement: Fastmail's Email/set replaces the
- * complete `mailboxIds` and `keywords` maps, so the engine always fetches
- * current state first and writes back complete desired maps.
+ * Mutations use RFC 8620 PatchObject updates (see computeUpdates and
+ * jmap.ts updateEmails): whole-map `mailboxIds`/`keywords` values REPLACE
+ * the entire map — lossy for unmentioned keywords and forbidden for
+ * server-managed ones ($maskedemail) — so the engine emits slash-path
+ * patches that touch only the keys each action needs.
  */
 
 import type { Context } from '../context.ts';
@@ -22,6 +24,7 @@ import type { ExpandedRule } from '../compile/expand.ts';
 import type { Actions } from '../types.ts';
 import { JmapSession, type JmapMailbox } from './jmap.ts';
 import { renderFilter } from './filter.ts';
+import { utcMidnightIso } from '../util/dates.ts';
 
 export interface LiveEngineOptions {
   auth: string;
@@ -53,10 +56,6 @@ export interface EngineResult {
   mailboxes: JmapMailbox[];
 }
 
-function midnightIso(date: string): string {
-  return new Date(`${date}T00:00:00`).toISOString();
-}
-
 /**
  * Connect, load rules, and evaluate every rule's match set against the
  * scope mailbox. Does NOT mutate anything — apply() layers mutations on
@@ -77,6 +76,13 @@ export async function evaluateRules(ctx: Context, opts: LiveEngineOptions): Prom
     throw new Error(`No rules match --rule "${opts.rule}".`);
   }
 
+  // Validate CLI date scoping BEFORE opening a browser session — a bad
+  // --after/--before value should fail with a usage error, not a stack
+  // trace mid-session. Day boundaries are UTC (util/dates.ts), matching
+  // the compile-side rule filter emitter.
+  const scopeAfterIso = opts.after ? utcMidnightIso(opts.after) : null;
+  const scopeBeforeIso = opts.before ? utcMidnightIso(opts.before) : null;
+
   const session = await JmapSession.connect({ auth: opts.auth, chromium: opts.chromium, headed: opts.headed });
   try {
     const mailboxes = await session.getMailboxes();
@@ -86,8 +92,8 @@ export async function evaluateRules(ctx: Context, opts: LiveEngineOptions): Prom
     }
 
     const scopeConditions: unknown[] = [{ inMailbox: scopeMailbox.id }];
-    if (opts.after) scopeConditions.push({ after: midnightIso(opts.after) });
-    if (opts.before) scopeConditions.push({ before: midnightIso(opts.before) });
+    if (scopeAfterIso) scopeConditions.push({ after: scopeAfterIso });
+    if (scopeBeforeIso) scopeConditions.push({ before: scopeBeforeIso });
     const scopeFilter =
       scopeConditions.length === 1
         ? scopeConditions[0]
@@ -123,11 +129,23 @@ export async function evaluateRules(ctx: Context, opts: LiveEngineOptions): Prom
         if (selected) matches.push({ rule, matched: matchedIds, unsupported });
       }
 
-      if (selected && unsupported.length > 0) {
-        ctx.log.warn(
-          `Rule "${rule.name}": ${unsupported.length} condition leaf/leaves cannot be evaluated server-side; ` +
-            'matches shown are for the remainder of the condition only.',
-        );
+      if (unsupported.length > 0) {
+        // Partial evaluation poisons chain state too: the rule claims more
+        // than it would at delivery, so later rules under-report. Warn for
+        // non-selected rules as well — their claims still shape the chain
+        // the selected rules are verified against.
+        if (selected) {
+          ctx.log.warn(
+            `Rule "${rule.name}": ${unsupported.length} condition leaf/leaves cannot be evaluated server-side; ` +
+              'matches shown are for the remainder of the condition only.',
+          );
+        } else {
+          ctx.log.warn(
+            `Rule "${rule.name}" (outside --rule scope): ${unsupported.length} condition leaf/leaves cannot be ` +
+              'evaluated server-side; its claim on the chain is computed from the remainder of the condition only, ' +
+              'so matches shown for later rules may under-report.',
+          );
+        }
       }
 
       if (!rule.continueFlag) {

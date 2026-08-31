@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { computeUpdates, collectRuleLabels, describeActions } from '../src/live/engine.ts';
+import { computeUpdates, collectRuleLabels, describeActions, ensureLabelsExist, labelMailboxIds } from '../src/live/engine.ts';
 import type { Actions } from '../src/types.ts';
 import type { ExpandedRule } from '../src/compile/expand.ts';
+import type { JmapSession } from '../src/live/jmap.ts';
 
 // ExpandedRule carries the source Rule; the engine only reads name/actions/
 // continueFlag, so build a minimal stand-in for tests.
@@ -87,5 +88,33 @@ describe('collectRuleLabels / describeActions', () => {
     expect(describeActions({ notify: true, snooze_until: { time: '08:00' } })).toBe(
       'snooze (not retroactive), notify (not retroactive)',
     );
+  });
+});
+
+const MB = (id: string, name: string) => ({ id, name, role: null, parentId: null });
+
+describe('labelMailboxIds — case-insensitive label resolution (a2d48d2 regression guard)', () => {
+  test('resolves names regardless of case; skips unknown names', () => {
+    const mailboxes = [MB('l1', 'Account Alerts'), MB('l2', 'Receipts')];
+    const out = labelMailboxIds(mailboxes, ['account alerts', 'Nope', 'Receipts']);
+    expect(out.get('account alerts')).toBe('l1');
+    expect(out.get('Receipts')).toBe('l2');
+    expect(out.has('Nope')).toBe(false);
+  });
+});
+
+describe('ensureLabelsExist — creates only missing labels, case-insensitively', () => {
+  test('existing names (any case) are not recreated', async () => {
+    const created: string[] = [];
+    const fake = {
+      getMailboxes: async () => [MB('l1', 'Receipts')],
+      createLabel: async (name: string) => {
+        created.push(name);
+        return MB(`new-${name}`, name);
+      },
+    };
+    const made = await ensureLabelsExist(fake as unknown as JmapSession, ['receipts', 'Login Codes']);
+    expect(made).toEqual(['Login Codes']);
+    expect(created).toEqual(['Login Codes']);
   });
 });

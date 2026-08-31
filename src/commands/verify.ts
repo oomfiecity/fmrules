@@ -23,8 +23,8 @@ const builder = (y: Argv) =>
     chromium: { type: 'string', describe: 'Path to a Chromium executable (overrides auto-detect)' },
     headed: { type: 'boolean', describe: 'Show the browser during verification', default: false },
     mailbox: { type: 'string', describe: 'Mailbox to verify against (name)', default: 'Inbox' },
-    after: { type: 'string', describe: 'Only consider messages received after this date (YYYY-MM-DD)' },
-    before: { type: 'string', describe: 'Only consider messages received before this date (YYYY-MM-DD)' },
+    after: { type: 'string', describe: 'Only consider messages received after this date (YYYY-MM-DD, UTC day boundaries)' },
+    before: { type: 'string', describe: 'Only consider messages received before this date (YYYY-MM-DD, UTC day boundaries)' },
     rule: { type: 'string', describe: 'Verify only rules whose name contains this substring' },
     limit: { type: 'number', describe: 'Sample matches shown per rule', default: 5 },
   });
