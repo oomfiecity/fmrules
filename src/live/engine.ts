@@ -213,6 +213,53 @@ export function computeUpdates(
   return updates;
 }
 
+/** Every label name referenced by a set of rules' add_label actions. */
+export function collectRuleLabels(rules: readonly ExpandedRule[]): string[] {
+  return [
+    ...new Set(
+      rules
+        .map((r) => r.actions.add_label?.[0])
+        .filter((l): l is string => typeof l === 'string'),
+    ),
+  ];
+}
+
+/**
+ * Ensure every referenced label exists on the account, creating missing
+ * ones (as labels). Returns the names created. Fastmail's rule import
+ * does not create labels, and a rule firing into a missing label either
+ * fails or silently drops the label — so both `sync` (before import) and
+ * `apply` (before mutating) call this.
+ */
+export async function ensureLabelsExist(session: JmapSession, names: string[]): Promise<string[]> {
+  const mailboxes = await session.getMailboxes();
+  const existing = new Set(mailboxes.map((m) => m.name.toLowerCase()));
+  const created: string[] = [];
+  for (const name of names) {
+    if (!existing.has(name.toLowerCase())) {
+      await session.createLabel(name);
+      created.push(name);
+    }
+  }
+  return created;
+}
+
+/**
+ * Case-insensitive label-name → mailbox-id lookup. Mailbox names on the
+ * account may differ in case from the YAML (e.g. rules say "Account
+ * Alerts", account has "Account alerts"); filing must target the
+ * existing mailbox rather than assume exact-case equality.
+ */
+export function labelMailboxIds(mailboxes: readonly JmapMailbox[], names: string[]): Map<string, string> {
+  const byLower = new Map(mailboxes.map((m) => [m.name.toLowerCase(), m.id]));
+  const out = new Map<string, string>();
+  for (const name of names) {
+    const id = byLower.get(name.toLowerCase());
+    if (id) out.set(name, id);
+  }
+  return out;
+}
+
 /** Human-readable one-liner for a rule's actions (report output). */
 export function describeActions(actions: Actions): string {
   const parts: string[] = [];

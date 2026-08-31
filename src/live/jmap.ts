@@ -224,6 +224,27 @@ export class JmapSession {
     }
   }
 
+  /**
+   * Create a mailbox that presents as a label (Fastmail labels are
+   * mailboxes with `showAsLabel: true`). Used by the label pre-flight in
+   * apply/sync — Fastmail's filter import does NOT create labels that
+   * rules reference, so they must exist before rules file mail into them.
+   */
+  async createLabel(name: string): Promise<JmapMailbox> {
+    const res = await this.request([
+      ['Mailbox/set', { accountId: this.accountId, create: { k1: { name, showAsLabel: true } } }, 'm0'],
+    ]);
+    const data = res[0]![1] as {
+      created?: Record<string, JmapMailbox>;
+      notCreated?: Record<string, unknown>;
+    };
+    const mailbox = data.created?.['k1'];
+    if (!mailbox) {
+      throw new JmapError(`Could not create label "${name}": ${JSON.stringify(data.notCreated ?? {}).slice(0, 300)}`);
+    }
+    return mailbox;
+  }
+
   async close(): Promise<void> {
     await this.browser.close();
   }

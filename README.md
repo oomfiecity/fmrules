@@ -43,6 +43,8 @@ Every `.yml` file under `rules/` must be listed in `manifest.yml`'s `order` (and
 
 Pushes a compiled `mailrules.json` into a Fastmail account: wipes all existing filters, imports the new set, and verifies the count against server response. Uses a headless Chromium session (via playwright-core) since Fastmail doesn't expose a public API for filter management.
 
+Before importing, sync creates any labels the rules file into that don't yet exist on the account — Fastmail's filter import does not create them, and a rule firing into a missing label silently loses the label.
+
 ### One-time setup
 
 ```
@@ -131,4 +133,6 @@ fmrules apply --after 2026-04-22 --yes # scope by date
 Mutation notes: current `mailboxIds`/`keywords` are fetched per message and
 complete desired maps are written back (Fastmail's `Email/set` replaces whole
 maps). Delivery-only actions (`notify`, `send_copy_to`, `snooze_until`) are
-reported and skipped.
+reported and skipped. Missing labels referenced by rules are created first
+(shown in `--dry-run` as "would create"), so no message is ever archived
+without its label.

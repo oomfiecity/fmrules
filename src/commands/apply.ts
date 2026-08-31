@@ -19,7 +19,7 @@
 
 import type { Argv, CommandModule } from 'yargs';
 import { createContext } from '../context.ts';
-import { evaluateRules, computeUpdates, describeActions } from '../live/engine.ts';
+import { evaluateRules, computeUpdates, describeActions, collectRuleLabels, ensureLabelsExist, labelMailboxIds } from '../live/engine.ts';
 import type { EmailSummary } from '../live/jmap.ts';
 
 const builder = (y: Argv) =>
@@ -56,20 +56,29 @@ const handler: CommandModule['handler'] = async (argv) => {
   });
 
   try {
-    const { session, matches, scopeIds, scopeMailbox, mailboxes } = result;
-    const junk = mailboxes.find((m) => m.role === 'junk');
-    const trash = mailboxes.find((m) => m.role === 'trash');
+    const { session, matches, scopeIds, scopeMailbox } = result;
+    const junk = result.mailboxes.find((m) => m.role === 'junk');
+    const trash = result.mailboxes.find((m) => m.role === 'trash');
     if (!junk || !trash) throw new Error('Account has no junk/trash mailbox — cannot apply spam/trash actions.');
 
-    // Mailbox ids referenced by actions.
-    const labelIds = new Map<string, string>();
-    for (const m of matches) {
-      const label = m.rule.actions.add_label?.[0];
-      if (label && !labelIds.has(label)) {
-        const mb = mailboxes.find((x) => x.name === label);
-        if (mb) labelIds.set(label, mb.id);
-      }
+    // Label pre-flight: Fastmail's rule engine/import does not create
+    // labels. Create any referenced-but-missing labels before mutating so
+    // no message is ever archived without its label.
+    const referencedLabels = collectRuleLabels(matches.map((m) => m.rule));
+    const mailboxNames = new Set(result.mailboxes.map((m) => m.name.toLowerCase()));
+    const missingLabels = referencedLabels.filter((l) => !mailboxNames.has(l.toLowerCase()));
+    let mailboxes = result.mailboxes;
+    if (missingLabels.length > 0 && dryRun) {
+      ctx.log.info(`Would create missing label(s): ${missingLabels.join(', ')}`);
+    } else if (missingLabels.length > 0) {
+      const created = await ensureLabelsExist(session, missingLabels);
+      ctx.log.info(`Created missing label(s): ${created.join(', ')}`);
+      mailboxes = await session.getMailboxes();
     }
+
+    // Mailbox ids referenced by actions (case-insensitive — file into
+    // the account's existing mailbox whatever its case).
+    const labelIds = labelMailboxIds(mailboxes, collectRuleLabels(matches.map((m) => m.rule)));
 
     const actionable = matches.filter((m) => m.matched.length > 0);
     const totalClaimed = actionable.reduce((n, m) => n + m.matched.length, 0);

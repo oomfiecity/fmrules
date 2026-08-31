@@ -14,7 +14,7 @@
 
 import type { Argv, CommandModule } from 'yargs';
 import { createContext } from '../context.ts';
-import { evaluateRules, describeActions } from '../live/engine.ts';
+import { evaluateRules, describeActions, collectRuleLabels } from '../live/engine.ts';
 import type { EmailSummary } from '../live/jmap.ts';
 
 const builder = (y: Argv) =>
@@ -49,6 +49,26 @@ const handler: CommandModule['handler'] = async (argv) => {
 
   try {
     const { matches, scopeIds } = result;
+
+    // Pre-flight: labels rules reference but the account lacks. Read-only
+    // report — apply/sync will create them.
+    const mailboxByLower = new Map(result.mailboxes.map((m) => [m.name.toLowerCase(), m]));
+    for (const label of collectRuleLabels(matches.map((m) => m.rule))) {
+      const mb = mailboxByLower.get(label.toLowerCase());
+      if (!mb) {
+        ctx.log.warn(
+          `label "${label}" does not exist on the account — ` +
+            'rules filing into it will not label correctly until created (apply/sync create it automatically).',
+        );
+      } else if (mb.name !== label) {
+        ctx.log.warn(
+          `label case mismatch: rules say "${label}", account has "${mb.name}" — ` +
+            'filing targets the existing mailbox, but delivery-time rule evaluation may differ. ' +
+            'Consider normalising one side.',
+        );
+      }
+    }
+
     ctx.log.info(`Verifying ${matches.length} rule(s) against ${scopeIds.length} message(s).\n`);
 
     const sampleIds = matches.flatMap((m) => m.matched.slice(0, (argv.limit as number) ?? 5));
