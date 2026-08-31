@@ -84,8 +84,8 @@ Exactly one of `--file` or `--repo` must be provided.
 |---|---|
 | `GITHUB_TOKEN` | `sync --repo` — required to fetch release assets. |
 | `GITHUB_REPO` | `sync` — default for `--repo`. |
-| `FASTMAIL_AUTH_PATH` | `sync` / `login` — default for `--auth`. |
-| `PLAYWRIGHT_BROWSERS_PATH` | Chromium detection / install location. |
+| `FASTMAIL_AUTH_PATH` | `sync` / `login` / `verify` / `apply` — default for `--auth`. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Chromium detection / install location (all browser-session commands). |
 
 ## Drift warning
 
