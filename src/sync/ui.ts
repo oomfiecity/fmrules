@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { launch } from "./browser.ts";
 
 /** Sync is JMAP-driven now (see src/commands/sync.ts); only the login

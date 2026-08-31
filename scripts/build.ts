@@ -40,7 +40,6 @@ const fmrulesPkg = JSON.parse(readFileSync(fmrulesPkgPath, "utf8")) as { version
 
 const playwrightPkgPath = Bun.fileURLToPath(new URL(import.meta.resolve("playwright-core/package.json")));
 const playwrightPkgJson = JSON.parse(readFileSync(playwrightPkgPath, "utf8"));
-const playwrightPkgDir = dirname(playwrightPkgPath);
 
 /**
  * playwright-core has `require("../../package.json")` / `require.resolve(...)` calls
@@ -55,7 +54,6 @@ const patchPlaywrightPlugin: import("bun").BunPlugin = {
       if (!/package\.json/.test(contents)) return;
       if (process.env.BUILD_DEBUG) console.error("[patch]", args.path);
       const pkgLiteral = JSON.stringify(playwrightPkgJson);
-      const dirLiteral = JSON.stringify(playwrightPkgDir);
 
       contents = contents.replace(
         /require\.resolve\(\s*["'](?:\.\.\/)+package\.json["']\s*\)/g,
@@ -65,7 +63,6 @@ const patchPlaywrightPlugin: import("bun").BunPlugin = {
         /require\(\s*["'](?:\.\.\/)+package\.json["']\s*\)/g,
         `(${pkgLiteral})`,
       );
-      void dirLiteral;
 
       return { contents, loader: "js" };
     });

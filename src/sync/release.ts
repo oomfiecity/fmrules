@@ -1,10 +1,7 @@
 import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
 
 export interface LatestRules {
-  name: string;
-  mimeType: string;
   buffer: Buffer;
   count: number;
 }
@@ -52,8 +49,6 @@ export async function downloadLatestRules(repo: string, fileName = "mailrules.js
   const buffer = Buffer.from(arrayBuffer);
 
   return {
-    name: asset.name,
-    mimeType: asset.content_type || "application/octet-stream",
     buffer,
     count: countRules(buffer),
   };
@@ -62,8 +57,6 @@ export async function downloadLatestRules(repo: string, fileName = "mailrules.js
 export async function loadLocalRules(filePath: string): Promise<LatestRules> {
   const buffer = await readFile(filePath);
   return {
-    name: basename(filePath),
-    mimeType: "application/json",
     buffer,
     count: countRules(buffer),
   };
