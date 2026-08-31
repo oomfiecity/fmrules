@@ -13,12 +13,12 @@ Format reference: [SPEC(10).md](SPEC(10).md).
 | `fmrules login` | Open a browser to sign in to Fastmail; save session to `auth.json`. |
 | `fmrules sync` | Delete all Fastmail filters and import a `mailrules.json` (local file or GitHub release). |
 | `fmrules verify` | Check rules against live mailbox content, server-side and read-only. |
-| `fmrules apply` | Retroactively apply rules to an existing mailbox via JMAP (SPEC(10).md §11.3). |
+| `fmrules apply` | Retroactively apply rules to an existing mailbox via JMAP — the out-of-band operation SPEC(10).md §2 anticipated, since Fastmail's rule engine fires only at delivery. |
 | `fmrules install-browsers` | Pre-download Chromium via playwright-core (sync auto-installs on first use if skipped). |
 
 Global flags (all commands): `--cwd`, `--verbose`/`-v`, `--quiet`/`-q`, `--color`.
 
-Compile flags: `--out <path>` (default `mailrules.json`), `--no-lockfile`, `--dry-run`.
+Compile flags: `--out <path>` (alias `-o`, default `mailrules.json`), `--no-lockfile`, `--dry-run`.
 
 ## Project layout
 
@@ -43,7 +43,7 @@ Every `.yml` file under `rules/` must be listed in `manifest.yml`'s `order` (and
 
 Replaces all Fastmail rules with a compiled `mailrules.json`, driven by JMAP (`Rule/set`) through an authenticated browser session — the same mechanism Fastmail's web client uses, replacing the earlier settings-UI automation, which was flaky (SPA re-render races, select-all races, reload stalls).
 
-Safety ordering: labels the rules file into are created first (Fastmail's rule engine never creates them — a rule firing into a missing label silently loses the label); every incoming rule is validated to carry a structured `filter` (compile output from fmrules ≥ 4.1.2) *before* the existing set is destroyed, so a bad file never wipes the account; the created count is verified against the server's confirmation.
+Safety ordering: labels the rules file into are created first (Fastmail's rule engine never creates them — a rule firing into a missing label silently loses the label); the file is shape-checked and every incoming rule validated to carry a structured `filter` (compile output from fmrules ≥ 4.1.2) *before* the existing set is destroyed, so a malformed or filterless file never wipes the account; the created count is verified against the server's confirmation. A compiled file containing `filter: null` rules — `when: always`, VIP/contact-group membership, non-`with:` `raw:` — is refused by sync; `compile`/`check` warn when emitting such rules. Server-side create rejections (a condition Fastmail refuses, an overlong name) can still abort after the destroy step — the account's rules are always reproducible from YAML, so recompile and re-sync recovers.
 
 ### One-time setup
 
@@ -89,7 +89,7 @@ Exactly one of `--file` or `--repo` must be provided.
 
 ## Drift warning
 
-The compiler is one-way — YAML is the source of truth. Any change made through Fastmail's web interface will be overwritten by the next `fmrules sync`. Treat the Fastmail web UI as read-only for rules once an `fmrules` project is in use. See SPEC(10).md §11.3.
+The compiler is one-way — YAML is the source of truth. Any change made through Fastmail's web interface will be overwritten by the next `fmrules sync`. Treat the Fastmail web UI as read-only for rules once an `fmrules` project is in use. See SPEC(10).md §11.3. Note: the per-rule diff-and-warn mitigation §11.3 describes is not yet implemented — `fmrules sync` replaces the whole rule set (after pre-flight validation) without confirming individual deletions or modifications.
 
 ## `fmrules verify`
 
@@ -106,14 +106,26 @@ fmrules verify --rule "Tumblr" --limit 3        # one rule, 3 samples
 fmrules verify --mailbox Archive --after 2026-01-01
 ```
 
+| Flag | Default | Description |
+|---|---|---|
+| `--mailbox <name>` | `Inbox` | Mailbox to verify against. |
+| `--after <date>` / `--before <date>` | — | Restrict scope by receive date (`YYYY-MM-DD`, UTC day boundaries). |
+| `--rule <substr>` | — | Verify only rules whose name contains this substring (chain state still tracked for all rules). |
+| `--limit <n>` | `5` | Match samples shown per rule. |
+| `--auth` / `--chromium` / `--headed` | — | Browser-session options, shared with `sync`/`apply`. |
+
 Matching is delegated to the server via structured JMAP `Email/query`
-filters, so semantics (stemming, header substring matching, address handling)
-are Fastmail's own rather than a reimplementation. Two caveats:
+filters, so semantics (stemming, header substring matching, address
+handling) are Fastmail's own rather than a reimplementation. Three caveats:
 
 - Delivery-time predicates (`conv_followed`, `msg_pinned`, …) match against
   *current* message state, which is not necessarily the state at delivery.
 - VIP and contact-group membership have no server-side filter equivalent;
   rules using them are reported as not server-evaluable.
+- `anywhere:` phrases and `raw: with:` values are approximated as a
+  full-text query here, while the installed delivery-time rule matches
+  address fields only (from/to/cc/bcc/deliveredTo) — counts for these
+  rules can diverge from delivery-time behavior.
 
 ## `fmrules apply`
 
@@ -127,12 +139,23 @@ archive, spam, trash.
 fmrules apply --dry-run                # plan only: per-rule match and change counts
 fmrules apply --yes                    # actually mutate (required, no prompt)
 fmrules apply --rule "Zeus" --yes      # scope to one rule
-fmrules apply --after 2026-04-22 --yes # scope by date
+fmrules apply --after 2026-04-22 --yes # scope by date (UTC day boundaries)
 ```
 
-Mutation notes: current `mailboxIds`/`keywords` are fetched per message and
-complete desired maps are written back (Fastmail's `Email/set` replaces whole
-maps). Delivery-only actions (`notify`, `send_copy_to`, `snooze_until`) are
+| Flag | Default | Description |
+|---|---|---|
+| `--mailbox <name>` | `Inbox` | Mailbox to apply rules to. |
+| `--after <date>` / `--before <date>` | — | Restrict scope by receive date (`YYYY-MM-DD`, UTC day boundaries). |
+| `--rule <substr>` | — | Apply only rules whose name contains this substring (chain state still tracked for all rules). |
+| `--dry-run` | `false` | Report what would change without mutating. |
+| `--yes` | `false` | Required to actually mutate. |
+| `--auth` / `--chromium` / `--headed` | — | Browser-session options, shared with `sync`/`verify`. |
+
+Mutation notes: updates are sent as RFC 8620 PatchObject slash-path patches
+(`mailboxIds/<id>`, `keywords/$seen`) — the same form Fastmail's own web
+client uses — so server-managed keywords (`$maskedemail` on Apple
+hide-my-email mail) are never touched and no whole-map replacement ever
+occurs. Delivery-only actions (`notify`, `send_copy_to`, `snooze_until`) are
 reported and skipped. Missing labels referenced by rules are created first
-(shown in `--dry-run` as "would create"), so no message is ever archived
-without its label.
+(shown in `--dry-run` as "would create", with the would-be label-adds
+counted in the plan), so no message is ever archived without its label.

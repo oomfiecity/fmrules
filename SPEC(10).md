@@ -61,16 +61,18 @@ permanent exclusions, not "not yet" items.
   correct answer if two rules share actions; there is no `action_set` concept.
 - **Bidirectional sync.** YAML is the source of truth. Changes made in
   Fastmail's web interface will be overwritten by the next compile-and-sync
-  (see §11.2 on drift).
+  (see §11.3 on drift).
 - **Importing existing Fastmail rules.** The reverse direction — reading
   rules from a Fastmail account and producing YAML — is not defined by this
   spec but is a prerequisite to safe first use against an existing account
-  (see §11.3).
-- **Retroactive rule application.** Fastmail does not support applying rules
-  to existing messages or folders; rules fire only at delivery. A future
-  sync tool might simulate this by fetching matching messages and applying
-  actions directly, but that is out of scope for the spec and not available
-  from Fastmail itself.
+  (see §11.4).
+- **Retroactive rule application in the format.** Fastmail does not support
+  applying rules to existing messages or folders; rules fire only at
+  delivery, and the format and compiler do not change that. The `fmrules
+  apply` companion command implements the out-of-band operation this
+  section anticipated — fetching matching messages and applying actions
+  directly via JMAP — but it remains outside the format itself, and
+  delivery-time semantics are the only ones the spec defines.
 - **Relative dates.** Only absolute `YYYY-MM-DD` values are accepted in date
   conditions. Fastmail freezes relative search values (`1w`, `1m`, `1y`) into
   absolute timestamps at filter-creation time, so "last month" written in a
@@ -854,20 +856,23 @@ explicit and unsurprising.
 `before`. `after` and `before` may be combined to form a range. At least
 one of the three match-type keys is required.
 
-**Boundary behavior is Fastmail-defined.** The exact semantics at day
-boundaries — whether `after: "2025-01-01"` includes or excludes messages
-received at `2025-01-01T00:00:00`, and similarly for `before:` at
-end-of-day — are determined by Fastmail's filter engine, not by this
-spec. The summary column in the match-type table above reflects the
-typical user-intent reading ("on this date or later / earlier"), but
-implementations and authors should test boundary cases against a real
-account if day-boundary semantics matter to a specific rule.
+**Boundary behavior is pinned to UTC by fmrules.** The structured
+`filter` emitted alongside the search string (§11.5) carries explicit
+ISO timestamps: `after: "2025-01-01"` becomes the instant
+`2025-01-01T00:00:00Z`, and `equals: "2025-06-15"` becomes the UTC day
+window `[2025-06-15T00:00:00Z, 2025-06-16T00:00:00Z)`. Day boundaries are
+therefore UTC-defined and deterministic across compiling machines — not
+left to Fastmail's date-only search parsing or the compiler's local
+timezone. (The emitted search string keeps Fastmail's `date:`/`after:`/
+`before:` operators, whose own boundary parsing remains Fastmail-defined;
+the structured filter is authoritative for rule evaluation.) Authors in
+non-UTC zones should note that a "day" is a UTC day.
 
-This is the one place the spec intentionally hedges rather than pinning
-behavior down. The dates-are-Fastmail-defined posture contrasts with
-size predicates (§8.4), which are **strict** by explicit `fmrules`
-specification — a message of exactly the given size matches neither
-`larger_than` nor `smaller_than`.
+The one deliberate consequence: because the filter pins UTC and UTC has no
+DST transitions, the `equals:` window is always exactly 24h. This
+contrasts with size predicates (§8.4), which are **strict** by explicit
+`fmrules` specification — a message of exactly the given size matches
+neither `larger_than` nor `smaller_than`.
 
 ### 8.7 The `raw:` escape hatch
 
@@ -1608,7 +1613,10 @@ The spec does not solve this. The expected mitigation lives in the
 should fetch the current rules from Fastmail, diff them against what the
 YAML would produce, and warn the user about any rules in Fastmail that
 would be deleted or modified by the sync. This is a tooling concern; the
-format itself is correct whether or not such a tool exists.
+format itself is correct whether or not such a tool exists. (The `fmrules`
+sync tool does not yet implement this diff-and-warn pass — it replaces the
+entire rule set, after pre-flight validation, without per-rule
+confirmation.)
 
 In practice: **make YAML edits the only way rules change.** Treat the
 Fastmail web UI as read-only for rules once an `fmrules` project is in
@@ -1657,6 +1665,18 @@ empty filter with the literal search string `*`. The compiler emits this
 form so catchall rules round-trip cleanly through Fastmail's UI and
 JSON export. Implementers should verify against Fastmail's present-day
 API if the representation changes in a future version.
+
+**Structured `filter`.** Since fmrules 4.1.2 the compiler emits a
+structured `filter` alongside the search string — the form Fastmail's
+own web client stores and `Rule/set` create requires. Rules whose
+conditions have no verified structured form emit `filter: null`:
+`when: always`, VIP or contact-group membership, and `raw:` forms beyond
+`with:`. A rule whose condition *mixes* supported and unsupported leaves
+also emits `filter: null` — dropping just the unsupported leaf would
+install a rule broader (or narrower, under `any:`) than the YAML, so the
+whole rule is refused. `fmrules compile`/`check` warn when emitting such
+rules, and `fmrules sync` refuses a file containing them rather than
+wiping the account and failing mid-import.
 
 **Bootstrap round-tripping.** Because the emit target is Fastmail's own
 format, a future bootstrap importer (§11.4) has a defined input: read
